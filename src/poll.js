@@ -33,10 +33,6 @@ export const WIRE_OPTIONS = 256;
 export const MAX_VOTERS = 32;
 const MAX_TIME = 8.64e15;
 
-/** Where the plugin keeps a poll: one record each. */
-export const PREFIX = "poll/";
-export const recordKey = (id) => `${PREFIX}${id}`;
-
 /** The origin of a change made on this phone, and of one taken from the twin. */
 export const LOCAL = "local";
 export const LIVE = "live";

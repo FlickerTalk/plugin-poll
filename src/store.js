@@ -1,15 +1,32 @@
 // Keeping polls in `ft.records`, the plugin's own room on this phone (4 MB, `storage: small`), one
-// record each: `poll/<id>`. The plugin is never told it is being closed (finding 5 of the plan),
+// record each, under the place the plugin was opened in: `poll/<place>/<id>`. The place is the
+// conversation's opaque `chat` id from `onOpen` (43 characters, this phone's own, never sent), or
+// `local` outside a conversation; a keeper lists, loads, saves and forgets only inside its place,
+// so a poll of one conversation is unknown in any other. The plugin is never told it is being closed (finding 5 of the plan),
 // so a poll is written after every change. Writes go one after another; changes that arrive
 // while one is on its way are written together right after it. A write the core refuses (the
 // quota is full) leaves the poll on screen and says so. A received poll is kept only once its
 // question has arrived from the twin.
 
-import { PREFIX, Poll, recordKey } from "./poll.js";
+import { Poll } from "./poll.js";
+
+/** The place of what is opened outside a conversation: never 43 characters, so never a chat id. */
+export const NO_CHAT = "local";
+const CHAT = /^[A-Za-z0-9_-]{43}$/;
+
+/** Where a poll opened with this `chat` is kept: the chat id if it is one, otherwise `local`. */
+export function placeOf(chat) {
+  return typeof chat === "string" && CHAT.test(chat) ? chat : NO_CHAT;
+}
+
+/** The record of a poll in a place. At most 5 + 43 + 1 + 64 = 113 bytes, under the core's 128. */
+export const recordKey = (place, id) => `poll/${place}/${id}`;
 
 export class Keeper {
-  constructor(records) {
+  constructor(records, place = NO_CHAT) {
     this.records = records;
+    this.place = place;
+    this.prefix = `poll/${place}/`;
     this.full = false;
     this.listeners = new Set();
     this.dirty = new Map();
@@ -56,7 +73,7 @@ export class Keeper {
   async write(poll) {
     let ok = false;
     try {
-      ok = (await this.records.set(recordKey(poll.id), poll.record())) === true;
+      ok = (await this.records.set(recordKey(this.place, poll.id), poll.record())) === true;
     } catch {
       ok = false;
     }
@@ -71,13 +88,14 @@ export class Keeper {
   async index() {
     let keys = [];
     try {
-      keys = (await this.records.keys(PREFIX)) || [];
+      keys = (await this.records.keys(this.prefix)) || [];
     } catch {
       keys = [];
     }
     const polls = [];
     for (const key of keys) {
-      const id = key.slice(PREFIX.length);
+      if (!key.startsWith(this.prefix)) continue;
+      const id = key.slice(this.prefix.length);
       if (!id || id.includes("/")) continue;
       const poll = await this.load(id);
       if (poll) polls.push({ id, question: poll.question, kind: poll.kind, closed: Boolean(poll.closed), shared: poll.shared, updatedAt: poll.updatedAt });
@@ -88,7 +106,7 @@ export class Keeper {
   /** A kept poll, or null. */
   async load(id) {
     try {
-      const text = await this.records.get(recordKey(id));
+      const text = await this.records.get(recordKey(this.place, id));
       if (typeof text !== "string") return null;
       const poll = Poll.parse(id, text);
       return poll?.hasHeader ? poll : null;
@@ -100,6 +118,6 @@ export class Keeper {
   async forget(id) {
     this.dirty.delete(id);
     await this.settled();
-    await this.records.forget(recordKey(id));
+    await this.records.forget(recordKey(this.place, id));
   }
 }

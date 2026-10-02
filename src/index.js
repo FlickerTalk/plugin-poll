@@ -6,6 +6,11 @@
 // result in the composer as text; 📆 hands the chosen day to the phone's calendar as an .ics file
 // (saved with `ft.save`, or sent with `ft.send`). Nothing leaves this frame but what the user
 // sends or saves, and what live says to the same plugin on the other phone.
+//
+// Each conversation keeps its own polls: they live under the conversation's opaque `chat` id from
+// `onOpen` (core 1.3.0), this phone's own and never sent. In a chat, only that chat's polls exist;
+// a poll of another chat is unknown there, so a hello that resumes it gets no answer. Outside a
+// conversation (no valid `chat`) polls are this phone's only and never go live.
 
 import { name as APP_NAME, version as APP_VERSION } from "../module.json";
 import { datePicker } from "./date-picker.js";
@@ -15,7 +20,7 @@ import { calendarFile, calendarName } from "./ics.js";
 import { HELLO, Inbox, LiveSession, inOrder, isNewer, toBase64 } from "./live.js";
 import { pollReplica } from "./live-poll.js";
 import { MAX_OPTION, MAX_QUESTION, Poll } from "./poll.js";
-import { Keeper } from "./store.js";
+import { Keeper, NO_CHAT, placeOf } from "./store.js";
 import { STRINGS } from "./strings.js";
 import { labelOf, summaryOf } from "./summary.js";
 
@@ -117,8 +122,7 @@ class PollElement extends HTMLElement {
 
   connectedCallback() {
     this.ft = globalThis.ft;
-    this.keeper = new Keeper(this.ft.records);
-    this.keeper.onFull(() => this.paintWarning());
+    this.useKeeper(NO_CHAT);
     this.inbox = new Inbox(FORMAT);
     this.root.innerHTML = `<style>${STYLE}</style><div class="view"></div>`;
     this.view = this.root.querySelector(".view");
@@ -130,6 +134,13 @@ class PollElement extends HTMLElement {
     this.paint();
   }
 
+  /** The keeper of one place: it lists, loads, saves and forgets only there. */
+  useKeeper(place) {
+    this.place = place;
+    this.keeper = new Keeper(this.ft.records, place);
+    this.keeper.onFull(() => this.paintWarning());
+  }
+
   T(key, holes = {}) {
     return t(this.lang, key, { app: APP_NAME, ...holes });
   }
@@ -138,7 +149,14 @@ class PollElement extends HTMLElement {
 
   async onOpen(opening) {
     this.lang = opening.lang || "en";
-    this.mayLive = Boolean(opening.live);
+    const place = placeOf(opening.chat);
+    if (place !== this.place) {
+      if (this.poll) await this.leave();
+      this.screen = "home";
+      this.useKeeper(place);
+    }
+    // Live needs a conversation to keep the poll in: if the core said live without a chat, no live.
+    this.mayLive = Boolean(opening.live) && place !== NO_CHAT;
     this.setAttribute("lang", this.lang);
     this.setAttribute("dir", dirOf(this.lang));
     this.metas = await this.keeper.index();
@@ -255,6 +273,7 @@ class PollElement extends HTMLElement {
 
   /** What the twin says: for the live poll, or a hello for one that is not live here. */
   async onLive(data) {
+    if (!this.mayLive) return;
     const message = this.inbox.take(data);
     if (!message) return;
     if (this.session && message.doc === this.session.doc) {
@@ -483,6 +502,7 @@ class PollElement extends HTMLElement {
     const kind = (name, emoji) => `<button type="button" data-act="kind" data-kind="${name}" aria-pressed="${this.newKind === name}">${emoji} ${escape(T(name === "dates" ? "kindDates" : "kindText"))}</button>`;
     return `
       <div class="bar"><h1 class="grow">${escape(T("title"))}</h1>${button("close", T("close"), "close-outline")}</div>
+      ${this.place === NO_CHAT ? `<p class="hint" data-local>${escape(T("localHome"))}</p>` : ""}
       <div class="kinds" role="group">${kind("dates", "📅")}${kind("text", "📝")}</div>
       <form data-form="new"><input name="value" maxlength="${MAX_QUESTION}" autocomplete="off" placeholder="${escape(T("questionPlaceholder"))}" aria-label="${escape(T("questionPlaceholder"))}"><button type="submit" aria-label="${escape(T("create"))}">${icon("add-outline")}</button></form>
       ${rows ? `<ul>${rows}</ul>` : `<p class="empty">${escape(T("empty"))}</p>`}`;

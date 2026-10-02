@@ -63,7 +63,7 @@ describe("the package", () => {
     await element.keeper.settled();
     expect(element.shadowRoot.querySelector("[data-name]").textContent).toBe("Dinner?");
     expect(element.shadowRoot.querySelector("[data-picker] calendar-multi")).not.toBeNull();
-    expect([...core.records.keys()]).toEqual([`poll/${element.poll.id}`]);
+    expect([...core.records.keys()]).toEqual([`poll/local/${element.poll.id}`]);
   });
 
   it("carries the licence of everything inside the bundle", () => {

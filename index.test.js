@@ -1,24 +1,32 @@
 // The plugin as the user sees it (plan-plugins-nuevos §12), against the fake core: a poll of dates
 // or of texts; ✅ / 🤔 / ❌; anyone adds options; whoever created it closes it choosing one; 📤
 // proposes the result; 📆 hands the chosen day to the calendar as an .ics file; the 21 languages;
-// and two phones in one conversation voting live, losing each other and meeting again.
+// and two phones in one conversation voting live, losing each other and meeting again. Each
+// conversation keeps its own polls under its opaque `chat` id (onOpen, core 1.3.0); outside a
+// conversation polls are this phone's only and never live; the `chat` id never leaves the phone.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { calendarFile } from "./src/ics.js";
 import { FORMAT } from "./src/index.js";
 import { HELLO, UPDATE, VERSION, decode, encode, fromBase64 } from "./src/live.js";
-import { Poll, recordKey } from "./src/poll.js";
+import { Poll } from "./src/poll.js";
+import { NO_CHAT, recordKey } from "./src/store.js";
 import { connect, fakeCore } from "./test/fake-core.js";
 
 const manifest = JSON.parse(readFileSync(join(import.meta.dirname, "module.json"), "utf8"));
+
+/** A conversation's opaque id as the core gives it: 43 characters, this phone's own. */
+const chat = (name) => `Chat${name}`.padEnd(43, "x");
+const CHAT_A = chat("OfAWithB");
+const CHAT_B = chat("OfBWithA");
 
 const flush = async () => {
   for (let at = 0; at < 60; at += 1) await Promise.resolve();
 };
 
-/** One phone with the plugin open: `live` when opened from a conversation with it granted. */
-async function phone(core, opening = { live: true }) {
+/** One phone with the plugin open: in a conversation (`chat`) with `live` granted, by default. */
+async function phone(core, opening = { live: true, chat: CHAT_A }) {
   globalThis.ft = core.ft;
   const element = document.createElement("ft-poll");
   document.body.append(element);
@@ -73,12 +81,12 @@ afterEach(() => {
 });
 
 describe("the manifest", () => {
-  it("asks for live and to propose, nothing more, on core 1.1.0", () => {
+  it("asks for live and to propose, nothing more, on core 1.3.0 (the first to give onOpen.chat)", () => {
     expect(manifest).toEqual({
       id: "com.flickertalk.poll",
       name: "Poll",
       version: "1.0.0",
-      minCoreVersion: "1.1.0",
+      minCoreVersion: "1.3.0",
       components: ["ft-poll"],
       permissions: { live: true, send: "propose" },
       summary: expect.any(String),
@@ -102,7 +110,7 @@ describe("one phone", () => {
     await vote(element, "Mon, Oct 12", "yes");
     expect(pressed(element, "Mon, Oct 12")).toBe("none");
     await vote(element, "Wed, Oct 14", "maybe");
-    const kept = Poll.parse(element.poll.id, core.records.get(recordKey(element.poll.id)));
+    const kept = Poll.parse(element.poll.id, core.records.get(recordKey(NO_CHAT, element.poll.id)));
     expect(kept.options().map((one) => one.date)).toEqual(["2026-10-12", "2026-10-14"]);
     expect(kept.answerOf(kept.who, kept.options()[1].id)).toBe("maybe");
     // Unticking a day on the calendar removes the option this phone added.
@@ -234,7 +242,7 @@ describe("one phone", () => {
     expect(inside(element).querySelector('[data-act="live"]')).toBeNull();
     expect(text(element)).toContain("To vote together, open Poll from a conversation");
     const core = fakeCore();
-    const inChat = await phone(core, { live: true });
+    const inChat = await phone(core, { live: true, chat: CHAT_A });
     await create(inChat, "Dinner?");
     await pick(inChat, "2026-10-12");
     await press(inChat, "back");
@@ -249,8 +257,8 @@ async function twoPhones() {
   const coreA = fakeCore();
   const coreB = fakeCore();
   const link = connect(coreA, coreB);
-  const a = await phone(coreA);
-  const b = await phone(coreB);
+  const a = await phone(coreA, { live: true, chat: CHAT_A });
+  const b = await phone(coreB, { live: true, chat: CHAT_B });
   const idle = async () => {
     await link.idle();
     await settle(a, b);
@@ -302,7 +310,7 @@ describe("two phones", () => {
     const file = new TextDecoder().decode(fromBase64(coreB.ft.save.mock.calls[0][2]));
     expect(file).toContain(`UID:${a.poll.id}@poll.flickertalk`);
     expect(file).toContain("DTSTART;VALUE=DATE:20261012");
-    const kept = Poll.parse(b.poll.id, coreB.records.get(recordKey(b.poll.id)));
+    const kept = Poll.parse(b.poll.id, coreB.records.get(recordKey(CHAT_B, b.poll.id)));
     expect(kept.closed).not.toBeNull();
     expect(kept.shared).toBe(true);
   });
@@ -351,7 +359,7 @@ describe("two phones", () => {
     await idle();
     document.body.removeChild(b);
     coreB.reload();
-    const again = await phone(coreB);
+    const again = await phone(coreB, { live: true, chat: CHAT_B });
     await press(again, "open", `[data-id="${id}"]`);
     await idle();
     expect(again.poll.answerOf(a.poll.who, optionId(again, "Mon, Oct 12"))).toBe("yes");
@@ -399,12 +407,11 @@ describe("two phones", () => {
   it("send only small messages, in parts when a poll is big", async () => {
     const { a, b, link, idle } = await twoPhones();
     await create(a, "Where?", "text");
-    // Many options added and removed: the state keeps the removed ones.
-    for (let round = 0; round < 4; round += 1) {
-      const ids = [];
-      for (let at = 0; at < 60; at += 1) ids.push(a.poll.addOption(`${"option ".repeat(12)}${round}-${at}`));
-      for (const id of ids.slice(0, round < 3 ? 60 : 0)) a.poll.removeOption(id);
-    }
+    // Many options added and removed (the state keeps the removed ones), made at once.
+    const opts = [];
+    for (let at = 0; at < 240; at += 1) opts.push({ id: `o${String(at).padStart(3, "0")}`, by: a.poll.who, gone: at < 180, text: `${"option ".repeat(12)}${at}` });
+    a.poll.data.opts = opts;
+    a.poll.changed("local");
     await settle(a);
     await press(a, "live");
     await idle();
@@ -412,4 +419,138 @@ describe("two phones", () => {
     for (const { data } of link.carried) expect(atob(data).length).toBeLessThanOrEqual(48 * 1024);
     expect(link.carried.some(({ data }) => decode(data, FORMAT).k === "part")).toBe(true);
   });
+
 });
+
+describe("each conversation apart", () => {
+  it("shows in a chat only that chat's polls, and none of them outside a conversation", async () => {
+    const core = fakeCore();
+    const one = chat("One");
+    const two = chat("Two");
+    const reopen = async (opening) => {
+      document.body.innerHTML = "";
+      core.reload();
+      return phone(core, opening);
+    };
+    let element = await phone(core, { live: true, chat: one });
+    await create(element, "In one");
+    const id = element.poll.id;
+    expect([...core.records.keys()]).toEqual([`poll/${one}/${id}`]);
+    element = await reopen({ live: true, chat: two });
+    expect(text(element)).toContain("No polls yet");
+    await create(element, "In two");
+    element = await reopen({ live: false });
+    expect(text(element)).toContain("No polls yet");
+    element = await reopen({ live: true, chat: one });
+    const titles = [...inside(element).querySelectorAll('[data-act="open"] .title')].map((node) => node.textContent);
+    expect(titles).toEqual(["In one"]);
+  });
+
+  it("outside a conversation keeps polls on this phone only: no live, nothing sent, nothing heard", async () => {
+    for (const opening of [{ live: false }, { live: true }, { live: true, chat: "too-short" }, { live: true, chat: `${chat("Bad")}`.slice(0, 42) + "/" }]) {
+      document.body.innerHTML = "";
+      const core = fakeCore();
+      const element = await phone(core, opening);
+      expect(text(element)).toContain("stay on this phone");
+      await create(element, "Alone");
+      await pick(element, "2026-10-12");
+      expect([...core.records.keys()]).toEqual([`poll/local/${element.poll.id}`]);
+      expect(inside(element).querySelector('[data-act="live"]')).toBeNull();
+      await core.hear(encode({ p: FORMAT, v: VERSION, k: HELLO, doc: element.poll.id, who: "someone", app: "1.0.0", sv: "{}", resume: true }));
+      await core.hear(encode({ p: FORMAT, v: VERSION, k: HELLO, doc: "another", who: "someone", app: "1.0.0", sv: "{}", title: "Hi" }));
+      await settle(element);
+      expect(element.poll.question).toBe("Alone");
+      expect(text(element)).not.toContain("Hi");
+      expect(core.sent).toHaveLength(0);
+    }
+  });
+
+  it("the attack: a hello resuming another chat's poll with its creator's who gets nothing", async () => {
+    // A shares X with C.
+    const coreA = fakeCore();
+    const coreC = fakeCore();
+    const withA = chat("COfCWithA");
+    const ac = connect(coreA, coreC);
+    const a = await phone(coreA, { live: true, chat: CHAT_A });
+    const c = await phone(coreC, { live: true, chat: withA });
+    await create(a, "Dinner?");
+    await pick(a, "2026-10-12");
+    await press(a, "live");
+    await ac.idle();
+    await settle(a, c);
+    await vote(c, "Mon, Oct 12", "yes");
+    await ac.idle();
+    await settle(a, c);
+    const x = a.poll.id;
+    const whoA = a.poll.who;
+    const whoC = c.poll.who;
+    const keptX = coreC.records.get(recordKey(withA, x));
+    expect(Poll.parse(x, keptX).answerOf(whoC, "d20261012")).toBe("yes");
+    // Later C opens Poll in the conversation with B, who learnt X's id and A's who.
+    await press(c, "close");
+    document.body.innerHTML = "";
+    coreC.reload();
+    const coreB = fakeCore();
+    connect(coreB, coreC);
+    const withB = chat("COfCWithB");
+    const cb = await phone(coreC, { live: true, chat: withB });
+    const sent = coreC.sent.length;
+    await coreC.hear(encode({ p: FORMAT, v: VERSION, k: HELLO, doc: x, who: whoA, app: "1.0.0", sv: "{}", resume: true }));
+    await settle(cb);
+    expect(coreC.sent.length).toBe(sent);
+    expect(cb.poll).toBeNull();
+    expect(coreC.records.get(recordKey(withA, x))).toBe(keptX);
+    // A hello without resume makes a poll of its own in this chat, with nothing of C's other one.
+    await coreC.hear(encode({ p: FORMAT, v: VERSION, k: HELLO, doc: x, who: whoA, app: "1.0.0", sv: "{}", title: "Dinner?" }));
+    await settle(cb);
+    expect(cb.poll.id).toBe(x);
+    const replies = coreC.sent.slice(sent).map((data) => decode(data, FORMAT));
+    expect(replies.map((one) => one.k)).toEqual(["sync"]);
+    expect(replies[0].who).not.toBe(whoC);
+    expect(JSON.parse(replies[0].sv).opts).toEqual([]);
+    const forged = Poll.create({ kind: "dates", question: "Forged", who: whoA, id: x });
+    forged.addOption("2026-10-12");
+    const state = forged.state();
+    state.votes[whoC] = { d20261012: { a: "no", t: 9e12 } };
+    await coreC.hear(encode({ p: FORMAT, v: VERSION, k: "sync", doc: x, who: whoA, app: "1.0.0", u: JSON.stringify(state) }));
+    await settle(cb);
+    expect(cb.poll.question).toBe("Forged");
+    expect(cb.poll.answerOf(whoC, "d20261012")).toBe("none");
+    expect(coreC.records.get(recordKey(withA, x))).toBe(keptX);
+    expect(Poll.parse(x, coreC.records.get(recordKey(withB, x))).question).toBe("Forged");
+  });
+
+  it("never lets the chat id leave the phone: not live, not in the state, not in the text or the file", async () => {
+    const { a, b, coreA, coreB, link, idle } = await shared();
+    const id = a.poll.id;
+    await vote(a, "Mon, Oct 12", "yes");
+    await vote(b, "Mon, Oct 12", "yes");
+    await pick(b, "2026-10-12", "2026-10-13", "2026-10-20");
+    await idle();
+    await press(a, "closePoll");
+    await press(a, "choose");
+    await press(a, "confirmClose");
+    await idle();
+    await press(b, "icsSave");
+    await press(b, "icsSend");
+    await press(a, "send");
+    await idle();
+    const seen = [...coreA.said, ...coreB.said];
+    const parts = new Map();
+    for (const data of [...coreA.sent, ...coreB.sent, ...link.carried.map((one) => one.data)]) {
+      seen.push(data);
+      const text = new TextDecoder().decode(fromBase64(data));
+      seen.push(text);
+      const message = JSON.parse(text);
+      if (message.k === "part") parts.set(message.id, `${parts.get(message.id) ?? ""}${message.data}`);
+    }
+    for (const whole of parts.values()) seen.push(new TextDecoder().decode(fromBase64(whole)));
+    for (const [name, mime, data] of [...coreB.ft.save.mock.calls, ...coreB.ft.send.mock.calls]) seen.push(name, mime, data, new TextDecoder().decode(fromBase64(data)));
+    expect(coreA.said).toHaveLength(1);
+    expect(coreB.ft.send).toHaveBeenCalledTimes(1);
+    const file = new TextDecoder().decode(fromBase64(coreB.ft.save.mock.calls[0][2]));
+    expect(file).toContain(`UID:${id}@poll.flickertalk`);
+    for (const secret of [CHAT_A, CHAT_B]) for (const one of seen) expect(one).not.toContain(secret);
+  });
+});
+

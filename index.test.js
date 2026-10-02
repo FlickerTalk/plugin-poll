@@ -638,6 +638,45 @@ describe("the look", () => {
     expect(css).not.toContain("host-context");
   });
 
+  it("lays each option out as one row: what it is, then its actions together, the bin never alone", async () => {
+    const core = fakeCore();
+    const element = await phone(core, { live: false });
+    await create(element, "Where?", "text");
+    await fill(element, "add", "A rather long option that has to wrap onto a second line inside its own column");
+    const dates = await phone(fakeCore(), { live: false });
+    await create(dates, "Dinner?");
+    await pick(dates, "2026-10-12");
+    await vote(dates, "Mon, Oct 12", "yes");
+    for (const one of [element, dates]) {
+      for (const row of inside(one).querySelectorAll("[data-option]")) {
+        // Two blocks only: what the option is (text or day, and its badge), and what can be done.
+        expect([...row.children].map((child) => child.className)).toEqual(["what", "acts"]);
+        const acts = row.querySelector(".acts");
+        expect(acts.querySelector(".theirs")).not.toBeNull();
+        expect(acts.querySelectorAll('[data-act="vote"]')).toHaveLength(3);
+        expect(acts.querySelector('[data-act="removeOption"]')).not.toBeNull();
+        expect(row.querySelector(".what .label")).not.toBeNull();
+      }
+    }
+    const style = inside(element).querySelector("style").textContent;
+    const rule = (selector) => style.match(new RegExp(`(?:^|\\n)${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+    // The row may put the actions under the text, all together and at the end; they never split.
+    expect(rule("li[data-option]")).toMatch(/flex-wrap:\s*wrap/);
+    expect(rule(".acts")).toMatch(/flex-wrap:\s*nowrap/);
+    expect(rule(".acts")).toMatch(/flex:\s*none/);
+    expect(rule(".acts")).toMatch(/margin-inline-start:\s*auto/);
+    // The text takes what is left and wraps instead of being cut.
+    expect(rule(".what")).toMatch(/flex:\s*1 1/);
+    expect(rule(".what")).toMatch(/min-width:\s*0/);
+    expect(rule(".label")).toMatch(/overflow-wrap:\s*anywhere/);
+    expect(style).not.toMatch(/\.label[^{]*\{[^}]*(ellipsis|nowrap)/);
+  });
+
+  it("can be made with createElement: its constructor adds no attribute (a browser refuses that)", () => {
+    const element = document.createElement("ft-poll");
+    expect(element.attributes).toHaveLength(0);
+  });
+
   it("keeps the content to a comfortable width on a tablet, centred", () => {
     const element = document.createElement("ft-poll");
     document.body.append(element);

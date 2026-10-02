@@ -79,10 +79,13 @@ li.chosen { box-shadow: inset 4px 0 0 var(--good); }
 li .open { flex: 1; display: flex; flex-direction: column; align-items: flex-start; text-align: start; border: 0; border-radius: 0; height: auto; padding: 10px 4px; opacity: 1; }
 .title { font-weight: 600; }
 .meta { color: var(--soft); font-size: 13px; }
-.label { flex: 1 1 40%; min-width: 0; overflow-wrap: anywhere; }
+.label { overflow-wrap: anywhere; }
+li[data-option] { flex-wrap: wrap; column-gap: 6px; row-gap: 2px; }
+.what { flex: 1 1 3.5em; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.acts { display: flex; flex-wrap: nowrap; flex: none; margin-inline-start: auto; align-items: center; gap: 2px; }
 .badge { color: var(--good); font-size: 13px; font-weight: 600; }
-.theirs, .mine { min-width: 28px; text-align: center; }
-.votes { display: flex; gap: 4px; }
+.theirs, .mine { min-width: 24px; justify-content: center; }
+.votes { display: flex; gap: 2px; }
 .votes button { min-width: 44px; padding: 0; }
 .status, .hint, .warn, .note { margin: 4px 0; }
 .status:empty, .warn:empty, .note:empty { display: none; }
@@ -119,7 +122,8 @@ class PollElement extends HTMLElement {
   constructor() {
     super();
     this.root = this.attachShadow({ mode: "open" });
-    this.lang = "en";
+    // Not `this.lang`: that is the reflected `lang` attribute, which a constructor may not add.
+    this.language = "en";
     this.mayLive = false;
     this.screen = "home";
     this.metas = [];
@@ -168,13 +172,13 @@ class PollElement extends HTMLElement {
   }
 
   T(key, holes = {}) {
-    return t(this.lang, key, { app: APP_NAME, ...holes });
+    return t(this.language, key, { app: APP_NAME, ...holes });
   }
 
   // ---- What the app hands over ----
 
   async onOpen(opening) {
-    this.lang = opening.lang || "en";
+    this.language = opening.lang || "en";
     // The app's own mode, as an attribute: WebKit has no :host-context, so the style hangs on :host([dark]).
     this.toggleAttribute("dark", Boolean(opening.dark));
     const place = placeOf(opening.chat);
@@ -185,8 +189,8 @@ class PollElement extends HTMLElement {
     }
     // Live needs a conversation to keep the poll in: if the core said live without a chat, no live.
     this.mayLive = Boolean(opening.live) && place !== NO_CHAT;
-    this.setAttribute("lang", this.lang);
-    this.setAttribute("dir", dirOf(this.lang));
+    this.setAttribute("lang", this.language);
+    this.setAttribute("dir", dirOf(this.language));
     this.metas = await this.keeper.index();
     this.paint();
   }
@@ -468,7 +472,7 @@ class PollElement extends HTMLElement {
   async sendSummary() {
     // Outside a conversation there is no composer: `say` would do nothing after leaving.
     if (!this.poll?.hasHeader || !this.inChat) return;
-    const text = summaryOf(this.poll, this.lang);
+    const text = summaryOf(this.poll, this.language);
     await this.leave();
     this.ft.say(text);
   }
@@ -573,8 +577,8 @@ class PollElement extends HTMLElement {
     if (!this.picker) {
       const today = todayOf();
       this.picker = datePicker({
-        lang: this.lang,
-        dir: dirOf(this.lang),
+        lang: this.language,
+        dir: dirOf(this.language),
         days: this.poll.options().map((one) => one.date),
         min: today,
         today,
@@ -659,12 +663,12 @@ class PollElement extends HTMLElement {
            ${this.inChat ? `<button type="button" data-act="icsSend" aria-label="${escape(T("icsSend"))}">${icon("calendar-outline")}${icon("send-outline")}</button>` : ""}`
         : "";
     const note = { saved: line("calendar-outline", T("icsSaved")), failed: line("alert-circle-outline", T("icsFailed")) }[this.icsNote] ?? "";
-    node.innerHTML = `<span class="chosen-text">${line("flag-outline", T("chosen", { option: labelOf(chosen, this.lang) }))}</span>${calendar}<p data-ics-note role="status">${note}</p>`;
+    node.innerHTML = `<span class="chosen-text">${line("flag-outline", T("chosen", { option: labelOf(chosen, this.language) }))}</span>${calendar}<p data-ics-note role="status">${note}</p>`;
   }
 
   /** A day in few words for a row, or the option's text. */
   rowLabel(option) {
-    return typeof option.date === "string" ? shortDay(option.date, this.lang) : option.text;
+    return typeof option.date === "string" ? shortDay(option.date, this.language) : option.text;
   }
 
   /** The other participants' answers on an option, as emoji, with a label to read them out. */
@@ -698,9 +702,7 @@ class PollElement extends HTMLElement {
         const choose = editable && this.choosing ? `<button type="button" data-act="choose" data-id="${id}" aria-pressed="${this.closing === option.id}">${icon("flag-outline")}<span>${escape(T("choose"))}</span></button>` : "";
         const remove = editable && !this.choosing && option.by === poll.who ? button("removeOption", T("remove"), "trash-outline", `class="plain" data-id="${id}"`) : "";
         return `<li data-option="${id}" data-good="${good}" class="${option.id === chosen ? "chosen" : ""}">
-          <span class="label">${escape(this.rowLabel(option))}</span>
-          ${good ? `<span class="badge">${line("star-outline", T("goodForBoth"))}</span>` : ""}
-          ${this.theirs(option)}${votes}${choose}${remove}</li>`;
+<span class="what"><span class="label">${escape(this.rowLabel(option))}</span>${good ? `<span class="badge">${line("star-outline", T("goodForBoth"))}</span>` : ""}</span><span class="acts">${this.theirs(option)}${votes}${choose}${remove}</span></li>`;
       })
       .join("");
   }
@@ -720,7 +722,7 @@ class PollElement extends HTMLElement {
     }
     const closing = this.closing ? poll.option(this.closing) : null;
     if (closing) {
-      node.innerHTML = `<span>${escape(T("confirmClose", { option: labelOf(closing, this.lang) }))}</span>
+      node.innerHTML = `<span>${escape(T("confirmClose", { option: labelOf(closing, this.language) }))}</span>
         <button type="button" class="danger" data-act="confirmClose">${icon("flag-outline")}<span>${escape(T("closePoll"))}</span></button>
         <button type="button" data-act="cancelClose">${escape(T("cancel"))}</button>`;
     } else if (this.choosing) {

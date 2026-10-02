@@ -10,6 +10,12 @@ const DIST = join(import.meta.dirname, "dist");
 const CAP = 300 * 1024;
 /** `http://` is allowed only as a known XML namespace, which is a name and never fetched. */
 const NAMESPACES = ["http://www.w3.org/2000/svg", "http://www.w3.org/1999/xhtml", "http://www.w3.org/1999/xlink", "http://www.w3.org/XML/1998/namespace"];
+/**
+ * The only other `http://` allowed, and only in the notices file: the copyright line of Ionicons'
+ * MIT licence ("Copyright (c) 2015-present Ionic (http://ionic.io/)"), which has to be reproduced
+ * as it is. The notices are a text file the frame never loads; nothing fetches it.
+ */
+const IN_NOTICES = ["http://ionic.io/"];
 
 function files(dir = DIST) {
   const all = [];
@@ -35,7 +41,8 @@ describe("the package", () => {
       const text = readFileSync(path, "utf8");
       expect(text, path).not.toMatch(/https:\/\//i);
       const plain = [...text.matchAll(/http:\/\/[^\s"'`)<>]*/gi)].map((match) => match[0]);
-      for (const address of plain) expect(NAMESPACES, `${path}: ${address}`).toContain(address);
+      const allowed = path.endsWith("THIRD_PARTY_NOTICES.md") ? [...NAMESPACES, ...IN_NOTICES] : NAMESPACES;
+      for (const address of plain) expect(allowed, `${path}: ${address}`).toContain(address);
     }
   });
 
@@ -70,7 +77,8 @@ describe("the package", () => {
     const notices = readFileSync(join(DIST, "THIRD_PARTY_NOTICES.md"), "utf8");
     expect(notices).toBe(readFileSync(join(import.meta.dirname, "THIRD_PARTY_NOTICES.md"), "utf8"));
     for (const name of ["cally 0.9.2", "atomico", "Ionicons 8.1.0"]) expect(notices).toContain(name);
-    expect(notices).toContain("Copyright (c) 2015-present Ionic");
+    // A licence is reproduced exactly as the package ships it.
+    expect(notices).toContain(readFileSync(join(import.meta.dirname, "node_modules", "ionicons", "LICENSE"), "utf8").trim());
     expect(notices.match(/Permission is hereby granted, free of charge/g).length).toBeGreaterThanOrEqual(3);
   });
 });

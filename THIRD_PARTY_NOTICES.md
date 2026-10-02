@@ -47,13 +47,12 @@ SOFTWARE.
 ## Ionicons 8.1.0
 
 The icons the app does not lend are the SVG files of the `ionicons` package, carried inside the
-bundle. In the notice below the address of Ionic is written without its scheme, so the package
-holds no web address.
+bundle.
 
 ```text
 The MIT License (MIT)
 
-Copyright (c) 2015-present Ionic (ionic.io)
+Copyright (c) 2015-present Ionic (http://ionic.io/)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

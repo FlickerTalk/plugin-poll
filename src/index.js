@@ -51,10 +51,14 @@ const STYLE = `
 * { box-sizing: border-box; }
 .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0 8px; }
 .grow { flex: 1; min-width: 0; }
-h1 { font-size: 18px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+h1 { font-size: 18px; margin: 0; overflow-wrap: anywhere; }
+.head { padding: 4px 0 8px; }
+.head [data-title-row] { padding: 2px 0 6px; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.actions [data-act="close"] { margin-inline-start: auto; }
 button {
   appearance: none; border: 1px solid currentColor; background: transparent; color: inherit;
-  border-radius: 10px; min-width: 44px; height: 44px; font: inherit; padding: 0 10px; cursor: pointer; opacity: .8;
+  border-radius: 10px; min-width: 44px; min-height: 44px; font: inherit; padding: 0 10px; cursor: pointer; opacity: .8;
 }
 button.on, button[aria-pressed="true"] { opacity: 1; box-shadow: inset 0 0 0 2px currentColor; }
 button.danger { color: var(--accent); }
@@ -556,7 +560,7 @@ class PollElement extends HTMLElement {
     const poll = this.poll;
     const editable = poll.editable;
     return `
-      <div class="bar" data-header></div>
+      <div class="head" data-header></div>
       <p class="status" data-status aria-live="polite"></p>
       <p class="hint" data-hint>${this.mayLive ? line("sync-outline", T("liveHint")) : escape(T("needsChat"))}</p>
       <p class="warn" data-warning role="alert"></p>
@@ -596,12 +600,16 @@ class PollElement extends HTMLElement {
     const poll = this.poll;
     const name = poll.question || this.pendingTitle || T("received");
     const live = this.session && (this.status === "joined" || this.status === "waiting");
+    // The question has its own line, whole: on a narrow phone a row shared with the buttons cut it
+    // to a few letters. The buttons wrap on the line below, as in List and Split.
     header.innerHTML = `
+      <div data-title-row><h1 data-name>${escape(name)}</h1></div>
+      <div class="actions" data-actions>
       ${button("back", T("back"), "arrow-back-outline")}
-      <h1 class="grow" data-name>${escape(name)}</h1>
       ${this.mayLive && poll.hasHeader && !poll.readOnly ? `<button type="button" data-act="live" class="${live ? "on" : ""}" aria-pressed="${live ? "true" : "false"}" aria-label="${escape(live ? T("stopLive") : T("live"))}">${icon("sync-outline")}<span>${escape(T("live"))}</span></button>` : ""}
       ${poll.hasHeader && this.inChat ? button("send", T("send"), "send-outline") : ""}
-      ${button("close", T("close"), "close-outline")}`;
+      ${button("close", T("close"), "close-outline")}
+      </div>`;
   }
 
   paintStatus() {

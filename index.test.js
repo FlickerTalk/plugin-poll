@@ -677,6 +677,31 @@ describe("the look", () => {
     expect(element.attributes).toHaveLength(0);
   });
 
+  it("puts the whole question on its own line, the buttons on a wrapping row below it", async () => {
+    const core = fakeCore();
+    const element = await phone(core, { live: true, chat: CHAT_A });
+    const long = `${"Which film shall we watch on Friday night ".repeat(5)}`.slice(0, 200);
+    await press(element, "kind", '[data-kind="text"]');
+    await fill(element, "new", long);
+    const header = inside(element).querySelector("[data-header]");
+    const titleRow = header.querySelector(":scope > [data-title-row]");
+    const actions = header.querySelector(":scope > [data-actions]");
+    expect(titleRow).not.toBeNull();
+    expect(actions).not.toBeNull();
+    expect(titleRow.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(titleRow.querySelector("[data-name]").textContent).toBe(long);
+    expect(long).toHaveLength(200);
+    expect(titleRow.querySelector("button")).toBeNull();
+    for (const act of ["back", "live", "send", "close"]) expect(actions.querySelector(`[data-act="${act}"]`), act).not.toBeNull();
+    const css = [...inside(element).querySelectorAll("style")].map((one) => one.textContent).join("\n");
+    expect(css).not.toContain("ellipsis");
+    expect(css).toMatch(/\.actions\s*\{[^}]*flex-wrap:\s*wrap/);
+    expect(css).toMatch(/button\s*\{[^}]*min-width:\s*44px[^}]*\}/);
+    expect(css).toMatch(/button\s*\{[^}]*min-height:\s*44px[^}]*\}/);
+    expect(css).toMatch(/h1\s*\{[^}]*overflow-wrap:\s*anywhere/);
+    expect(css).not.toMatch(/h1\s*\{[^}]*nowrap/);
+  });
+
   it("keeps the content to a comfortable width on a tablet, centred", () => {
     const element = document.createElement("ft-poll");
     document.body.append(element);

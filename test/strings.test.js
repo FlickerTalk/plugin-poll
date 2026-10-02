@@ -25,4 +25,14 @@ describe("Poll's catalogue", () => {
       expect(same, lang).toEqual([]);
     }
   });
+
+  it("holds no emoji: the view draws Ionicons beside the text, and the chat text adds its own marks", () => {
+    for (const lang of LANGUAGES) {
+      for (const [key, text] of Object.entries(STRINGS[lang])) expect(text, `${lang}.${key}`).not.toMatch(/\p{Extended_Pictographic}/u);
+    }
+    // The ✅ of the chat summary comes in through a hole.
+    expect(makeT(STRINGS)("es", "both", { mark: "✅" })).toBe("(✅ los dos)");
+    expect(makeT(STRINGS)("ja", "some", { mark: "✅", yes: 1, total: 2 })).toBe("（✅ 2人中1人）");
+  });
 });
+

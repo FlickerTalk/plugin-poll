@@ -39,7 +39,7 @@ describe("the summary of a closed date poll", () => {
   it("is written in each of the 21 languages, the day by Intl", () => {
     const poll = voted({ mine: ["yes"], theirs: ["yes"] });
     for (const lang of LANGUAGES) {
-      expect(summaryOf(poll, lang, { today: "2026-10-02" }), lang).toBe(`📅 Cena\n${t(lang, "decidedDate", { day: day(lang) })} ${t(lang, "both")}`);
+      expect(summaryOf(poll, lang, { today: "2026-10-02" }), lang).toBe(`📅 Cena\n${t(lang, "decidedDate", { day: day(lang) })} ${t(lang, "both", { mark: "✅" })}`);
     }
   });
 
@@ -57,7 +57,7 @@ describe("the summary of a closed date poll", () => {
     const poll = voted({ mine: ["yes"], theirs: ["maybe"] });
     expect(summaryOf(poll, "en", { today: "2026-10-02" })).toBe("📅 Cena\nLet's meet on Monday, October 12 (✅ 1 of 2)");
     const n = (value) => new Intl.NumberFormat("ar").format(value);
-    expect(summaryOf(poll, "ar", { today: "2026-10-02" })).toContain(t("ar", "some", { yes: n(1), total: n(2) }));
+    expect(summaryOf(poll, "ar", { today: "2026-10-02" })).toContain(t("ar", "some", { mark: "✅", yes: n(1), total: n(2) }));
   });
 
   it("adds the year when the day is not in this year", () => {

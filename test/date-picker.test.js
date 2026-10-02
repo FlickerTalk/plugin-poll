@@ -38,14 +38,18 @@ describe("the date picker", () => {
     expect(picker.days).toEqual(["2026-10-12", "2026-10-14"]);
   });
 
-  it("labels the month arrows in the phone's language, and points them the other way in Arabic", () => {
+  it("draws the month arrows as Ionicon chevrons labelled in the phone's language, the other way in Arabic", () => {
     const ltr = datePicker({ lang: "es", dir: "ltr", labels: LABELS });
     expect(ltr.element.querySelector('[slot="previous"]').getAttribute("aria-label")).toBe("Mes anterior");
     expect(ltr.element.querySelector('[slot="next"]').getAttribute("aria-label")).toBe("Mes siguiente");
-    expect(ltr.element.querySelector('[slot="previous"]').textContent).toBe("‹");
+    const drawn = (picker, slot) => picker.element.querySelector(`[slot="${slot}"] [data-icon]`)?.dataset.icon;
+    expect(drawn(ltr, "previous")).toBe("chevron-back-outline");
+    expect(drawn(ltr, "next")).toBe("chevron-forward-outline");
+    expect(ltr.element.querySelector('[slot="previous"]').textContent.trim()).toBe("");
     const rtl = datePicker({ lang: "ar", dir: "rtl", labels: LABELS });
     expect(rtl.element.querySelector("calendar-multi").getAttribute("dir")).toBe("rtl");
-    expect(rtl.element.querySelector('[slot="previous"]').textContent).toBe("›");
+    expect(drawn(rtl, "previous")).toBe("chevron-forward-outline");
+    expect(drawn(rtl, "next")).toBe("chevron-back-outline");
   });
 
   it("starts the week where the language does", () => {

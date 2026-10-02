@@ -1,9 +1,9 @@
 // Poll for FlickerTalk (plan-plugins-nuevos §12): a question with dates (a calendar of several days)
-// or text options; each one marks ✅ / 🤔 / ❌; options with ✅ from both stand out; anyone adds
-// options; whoever created the poll closes it choosing one. From a conversation, "🔄 Live" lets the
+// or text options; each one marks yes / maybe / no; options both said yes to stand out; anyone adds
+// options; whoever created the poll closes it choosing one. From a conversation, "Live" lets the
 // two phones vote at once over the core's direct channel (`live.js`, the whole state as `u`); what
-// each does apart is kept here and joins the other's when both have the poll open. 📤 puts the
-// result in the composer as text; 📆 hands the chosen day to the phone's calendar as an .ics file
+// each does apart is kept here and joins the other's when both have the poll open. Send puts the
+// result in the composer as text; the calendar buttons hand the chosen day over as an .ics file
 // (saved with `ft.save`, or sent with `ft.send`). Nothing leaves this frame but what the user
 // sends or saves, and what live says to the same plugin on the other phone.
 //
@@ -17,6 +17,7 @@ import { datePicker } from "./date-picker.js";
 import { shortDay, todayOf } from "./dates.js";
 import { dirOf, makeT } from "./i18n.js";
 import { calendarFile, calendarName } from "./ics.js";
+import { icon } from "./icons.js";
 import { HELLO, Inbox, LiveSession, inOrder, isNewer, toBase64 } from "./live.js";
 import { pollReplica } from "./live-poll.js";
 import { MAX_OPTION, MAX_QUESTION, Poll } from "./poll.js";
@@ -34,13 +35,19 @@ const t = makeT(STRINGS);
 const escape = (text) =>
   String(text).replace(/[&<>"']/g, (one) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[one]);
 
-const EMOJI = { yes: "✅", maybe: "🤔", no: "❌", none: "·" };
+/** Each answer's Ionicon: outline, and filled when it is the one chosen. Shape and colour differ. */
+const ANSWER_ICON = {
+  yes: ["checkmark-circle-outline", "checkmark-circle"],
+  maybe: ["help-circle-outline", "help-circle"],
+  no: ["close-circle-outline", "close-circle"],
+  none: ["remove-outline", "remove-outline"],
+};
 const ANSWERED = ["yes", "maybe", "no"];
 
 const STYLE = `
-:host { display: block; font: 15px system-ui, sans-serif; color: #111; --paper: #fff; --line: #d8d8d8; --soft: #666; --accent: #e0562b; --good: #1f8a4c; --good-bg: #e6f5ec; }
-@media (prefers-color-scheme: dark) { :host { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --good: #6fd39b; --good-bg: #16301f; } }
-:host-context([data-dark]) { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --good: #6fd39b; --good-bg: #16301f; }
+:host { display: block; max-inline-size: 640px; margin-inline: auto; font: 15px system-ui, sans-serif; color: #111; --paper: #fff; --line: #d8d8d8; --soft: #666; --accent: #e0562b; --good: #1f8a4c; --good-bg: #e6f5ec; --maybe: #a86400; }
+:host([dark]) { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --good: #6fd39b; --good-bg: #16301f; --maybe: #f0b04c; }
+@media (prefers-color-scheme: dark) { :host { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --good: #6fd39b; --good-bg: #16301f; --maybe: #f0b04c; } }
 * { box-sizing: border-box; }
 .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0 8px; }
 .grow { flex: 1; min-width: 0; }
@@ -53,7 +60,17 @@ button.on, button[aria-pressed="true"] { opacity: 1; box-shadow: inset 0 0 0 2px
 button.danger { color: var(--accent); }
 button.plain { border: 0; }
 .i { display: block; width: 22px; height: 22px; margin: auto; background: currentColor; -webkit-mask: var(--i) center/contain no-repeat; mask: var(--i) center/contain no-repeat; }
-form { display: flex; gap: 6px; align-items: center; margin: 0; }
+.i.svg { background: none; -webkit-mask: none; mask: none; }
+.i.svg svg { display: block; width: 100%; height: 100%; fill: currentColor; }
+.with { display: inline-flex; gap: 6px; align-items: center; }
+.with .i { flex: none; width: 18px; height: 18px; margin: 0; }
+button .i + span, button .i + .i { margin-inline-start: 4px; }
+button:has(span) { display: inline-flex; align-items: center; }
+button .i { display: inline-block; vertical-align: middle; }
+[data-answer="yes"] { color: var(--good); }
+[data-answer="maybe"] { color: var(--maybe); }
+[data-answer="no"] { color: var(--accent); }
+.entry { display: flex; gap: 6px; align-items: center; margin: 0; }
 input { flex: 1; min-width: 0; font: inherit; color: inherit; background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; height: 44px; }
 ul { list-style: none; margin: 8px 0 0; padding: 0; }
 li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border-bottom: 1px solid var(--line); min-height: 52px; padding: 6px 4px; }
@@ -62,10 +79,13 @@ li.chosen { box-shadow: inset 4px 0 0 var(--good); }
 li .open { flex: 1; display: flex; flex-direction: column; align-items: flex-start; text-align: start; border: 0; border-radius: 0; height: auto; padding: 10px 4px; opacity: 1; }
 .title { font-weight: 600; }
 .meta { color: var(--soft); font-size: 13px; }
-.label { flex: 1 1 40%; min-width: 0; overflow-wrap: anywhere; }
+.label { overflow-wrap: anywhere; }
+li[data-option] { flex-wrap: wrap; column-gap: 6px; row-gap: 2px; }
+.what { flex: 1 1 3.5em; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.acts { display: flex; flex-wrap: nowrap; flex: none; margin-inline-start: auto; align-items: center; gap: 2px; }
 .badge { color: var(--good); font-size: 13px; font-weight: 600; }
-.theirs, .mine { min-width: 28px; text-align: center; }
-.votes { display: flex; gap: 4px; }
+.theirs, .mine { min-width: 24px; justify-content: center; }
+.votes { display: flex; gap: 2px; }
 .votes button { min-width: 44px; padding: 0; }
 .status, .hint, .warn, .note { margin: 4px 0; }
 .status:empty, .warn:empty, .note:empty { display: none; }
@@ -82,17 +102,19 @@ li .open { flex: 1; display: flex; flex-direction: column; align-items: flex-sta
 .confirm { flex-wrap: wrap; padding: 8px 0; }
 .confirm span { flex: 1 1 100%; }
 .empty { color: var(--soft); text-align: center; padding: 40px 0; }
-calendar-multi { display: block; margin: 4px 0; }
+calendar-multi { display: block; inline-size: 100%; margin: 4px 0; }
 calendar-multi::part(header) { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 calendar-multi::part(button) { appearance: none; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 10px; min-width: 44px; height: 44px; font: inherit; }
-calendar-month { width: 100%; }
-calendar-month::part(button) { min-width: 40px; height: 40px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; }
+calendar-month { display: block; inline-size: 100%; --color-accent: var(--accent); --color-text-on-accent: #fff; }
+calendar-month::part(table) { inline-size: 100%; table-layout: fixed; }
+calendar-month::part(button) { inline-size: 100%; min-inline-size: 36px; block-size: 40px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; }
 calendar-month::part(selected) { background: var(--accent); color: #fff; }
 calendar-month::part(today) { box-shadow: inset 0 0 0 1px currentColor; }
 calendar-month::part(disallowed) { opacity: .35; }
 `;
 
-const icon = (name) => `<i class="i" style="--i:url(./icon/${name}.svg)"></i>`;
+/** A text with its icon beside it; the icon is decoration, the text says it. */
+const line = (name, text) => (text ? `<span class="with">${icon(name)}<span>${escape(text)}</span></span>` : "");
 const button = (act, label, name, extra = "") => `<button type="button" data-act="${act}" aria-label="${escape(label)}" ${extra}>${icon(name)}</button>`;
 
 /** The plugin's view: the polls this phone keeps, or one poll. */
@@ -100,7 +122,8 @@ class PollElement extends HTMLElement {
   constructor() {
     super();
     this.root = this.attachShadow({ mode: "open" });
-    this.lang = "en";
+    // Not `this.lang`: that is the reflected `lang` attribute, which a constructor may not add.
+    this.language = "en";
     this.mayLive = false;
     this.screen = "home";
     this.metas = [];
@@ -127,7 +150,9 @@ class PollElement extends HTMLElement {
     this.root.innerHTML = `<style>${STYLE}</style><div class="view"></div>`;
     this.view = this.root.querySelector(".view");
     this.root.addEventListener("click", (event) => this.onClick(event));
-    this.root.addEventListener("submit", (event) => this.onSubmit(event));
+    // No <form>: the frame is sandboxed without `allow-forms`, and Android's WebView blocks a form
+    // submission before any `submit` event. A field is confirmed by its button or by Enter.
+    this.root.addEventListener("keydown", (event) => this.onKey(event));
     this.ft.onOpen((opening) => this.onOpen(opening));
     // The frame does not wait for one message to be handled before handing the next.
     this.ft.live?.onMessage?.(inOrder((data) => this.onLive(data)));
@@ -141,14 +166,21 @@ class PollElement extends HTMLElement {
     this.keeper.onFull(() => this.paintWarning());
   }
 
+  /** Whether the plugin was opened in a conversation, where 📤 has a composer to propose to. */
+  get inChat() {
+    return this.place !== NO_CHAT;
+  }
+
   T(key, holes = {}) {
-    return t(this.lang, key, { app: APP_NAME, ...holes });
+    return t(this.language, key, { app: APP_NAME, ...holes });
   }
 
   // ---- What the app hands over ----
 
   async onOpen(opening) {
-    this.lang = opening.lang || "en";
+    this.language = opening.lang || "en";
+    // The app's own mode, as an attribute: WebKit has no :host-context, so the style hangs on :host([dark]).
+    this.toggleAttribute("dark", Boolean(opening.dark));
     const place = placeOf(opening.chat);
     if (place !== this.place) {
       if (this.poll) await this.leave();
@@ -157,8 +189,8 @@ class PollElement extends HTMLElement {
     }
     // Live needs a conversation to keep the poll in: if the core said live without a chat, no live.
     this.mayLive = Boolean(opening.live) && place !== NO_CHAT;
-    this.setAttribute("lang", this.lang);
-    this.setAttribute("dir", dirOf(this.lang));
+    this.setAttribute("lang", this.language);
+    this.setAttribute("dir", dirOf(this.language));
     this.metas = await this.keeper.index();
     this.paint();
   }
@@ -315,7 +347,7 @@ class PollElement extends HTMLElement {
     await this.session.hear(message);
   }
 
-  // ---- Clicks and forms ----
+  // ---- Clicks and fields ----
 
   async onClick(event) {
     const target = event.target.closest("button[data-act]");
@@ -372,6 +404,9 @@ class PollElement extends HTMLElement {
         if (!poll?.close(closing)) this.paintPoll();
         return;
       }
+      case "create":
+      case "addOption":
+        return this.confirmEntry(target.closest("[data-entry]"));
       case "live":
         return this.toggleLive();
       case "send":
@@ -393,13 +428,20 @@ class PollElement extends HTMLElement {
     }
   }
 
-  async onSubmit(event) {
-    const form = event.target.closest("form[data-form]");
-    if (!form) return;
+  /** Enter in a field confirms it, unless an input method is still composing a word. */
+  onKey(event) {
+    if (event.key !== "Enter" || event.isComposing) return;
+    const entry = event.target.closest?.("[data-entry]");
+    if (!entry) return;
     event.preventDefault();
-    const input = form.querySelector("input");
+    return this.confirmEntry(entry);
+  }
+
+  /** A field confirmed: the new poll's question, or a new text option. */
+  async confirmEntry(entry) {
+    const input = entry.querySelector("input");
     const value = input?.value ?? "";
-    if (form.dataset.form === "new") {
+    if (entry.dataset.entry === "new") {
       let poll;
       try {
         poll = Poll.create({ kind: this.newKind, question: value });
@@ -408,7 +450,7 @@ class PollElement extends HTMLElement {
       }
       await this.keeper.save(poll);
       this.show(poll);
-    } else if (form.dataset.form === "add" && this.poll?.addOption(value)) {
+    } else if (entry.dataset.entry === "add" && this.poll?.addOption(value)) {
       input.value = "";
       input.focus?.();
     }
@@ -428,8 +470,9 @@ class PollElement extends HTMLElement {
 
   /** 📤: the result as text in the composer. The app closes the plugin, so leave cleanly first. */
   async sendSummary() {
-    if (!this.poll?.hasHeader) return;
-    const text = summaryOf(this.poll, this.lang);
+    // Outside a conversation there is no composer: `say` would do nothing after leaving.
+    if (!this.poll?.hasHeader || !this.inChat) return;
+    const text = summaryOf(this.poll, this.language);
     await this.leave();
     this.ft.say(text);
   }
@@ -460,7 +503,7 @@ class PollElement extends HTMLElement {
   /** 📆 📤: the file in the composer, for the user to send. The app closes the plugin. */
   async sendCalendar() {
     const file = this.calendar();
-    if (!file) return;
+    if (!file || !this.inChat) return;
     await this.leave();
     this.ft.send(file.name, CALENDAR, file.data);
   }
@@ -492,19 +535,19 @@ class PollElement extends HTMLElement {
             <button type="button" class="danger" data-act="confirmDelete" data-id="${escape(meta.id)}">${escape(T("delete"))}</button>
             <button type="button" data-act="cancelDelete">${escape(T("cancel"))}</button></li>`;
         }
-        const kind = meta.kind === "dates" ? `📅 ${T("kindDates")}` : `📝 ${T("kindText")}`;
-        const closed = meta.closed ? ` · 🏁 ${T("closedTag")}` : "";
-        const shared = meta.shared ? ` · 🔄 ${T("shared")}` : "";
-        return `<li><button type="button" class="open" data-act="open" data-id="${escape(meta.id)}"><span class="title">${escape(meta.question)}</span><span class="meta">${escape(kind + closed + shared)}</span></button>
+        const kind = meta.kind === "dates" ? line("calendar-outline", T("kindDates")) : line("list-outline", T("kindText"));
+        const closed = meta.closed ? line("flag-outline", T("closedTag")) : "";
+        const shared = meta.shared ? line("sync-outline", T("shared")) : "";
+        return `<li><button type="button" class="open" data-act="open" data-id="${escape(meta.id)}"><span class="title">${escape(meta.question)}</span><span class="meta">${kind}${closed}${shared}</span></button>
           ${button("delete", T("delete"), "trash-outline", `data-id="${escape(meta.id)}"`)}</li>`;
       })
       .join("");
-    const kind = (name, emoji) => `<button type="button" data-act="kind" data-kind="${name}" aria-pressed="${this.newKind === name}">${emoji} ${escape(T(name === "dates" ? "kindDates" : "kindText"))}</button>`;
+    const kind = (name, drawn) => `<button type="button" data-act="kind" data-kind="${name}" aria-pressed="${this.newKind === name}">${icon(drawn)}<span>${escape(T(name === "dates" ? "kindDates" : "kindText"))}</span></button>`;
     return `
       <div class="bar"><h1 class="grow">${escape(T("title"))}</h1>${button("close", T("close"), "close-outline")}</div>
-      ${this.place === NO_CHAT ? `<p class="hint" data-local>${escape(T("localHome"))}</p>` : ""}
-      <div class="kinds" role="group">${kind("dates", "📅")}${kind("text", "📝")}</div>
-      <form data-form="new"><input name="value" maxlength="${MAX_QUESTION}" autocomplete="off" placeholder="${escape(T("questionPlaceholder"))}" aria-label="${escape(T("questionPlaceholder"))}"><button type="submit" aria-label="${escape(T("create"))}">${icon("add-outline")}</button></form>
+      ${this.place === NO_CHAT ? `<p class="hint" data-local>${line("phone-portrait-outline", T("localHome"))}</p>` : ""}
+      <div class="kinds" role="group">${kind("dates", "calendar-outline")}${kind("text", "list-outline")}</div>
+      <div class="entry" data-entry="new"><input name="value" maxlength="${MAX_QUESTION}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("questionPlaceholder"))}" aria-label="${escape(T("questionPlaceholder"))}"><button type="button" data-act="create" aria-label="${escape(T("create"))}">${icon("add-outline")}</button></div>
       ${rows ? `<ul>${rows}</ul>` : `<p class="empty">${escape(T("empty"))}</p>`}`;
   }
 
@@ -515,14 +558,14 @@ class PollElement extends HTMLElement {
     return `
       <div class="bar" data-header></div>
       <p class="status" data-status aria-live="polite"></p>
-      <p class="hint" data-hint>${escape(this.mayLive ? T("liveHint") : T("needsChat"))}</p>
+      <p class="hint" data-hint>${this.mayLive ? line("sync-outline", T("liveHint")) : escape(T("needsChat"))}</p>
       <p class="warn" data-warning role="alert"></p>
-      <p class="note" data-note>${poll.readOnly ? escape(T("readOnly")) : ""}</p>
+      <p class="note" data-note>${poll.readOnly ? line("download-outline", T("readOnly")) : ""}</p>
       <div class="invite" data-invite></div>
-      ${poll.hasHeader ? "" : `<p class="empty" data-loading>${escape(T("loading"))}</p>`}
+      ${poll.hasHeader ? "" : `<p class="empty" data-loading>${line("hourglass-outline", T("loading"))}</p>`}
       <div class="banner" data-banner></div>
       ${editable && poll.kind === "dates" ? `<p class="hint">${escape(T("pickDays"))}</p><div data-picker></div>` : ""}
-      ${editable && poll.kind === "text" ? `<form data-form="add"><input name="value" maxlength="${MAX_OPTION}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("addPlaceholder"))}" aria-label="${escape(T("addPlaceholder"))}"><button type="submit" aria-label="${escape(T("add"))}">${icon("add-outline")}</button></form>` : ""}
+      ${editable && poll.kind === "text" ? `<div class="entry" data-entry="add"><input name="value" maxlength="${MAX_OPTION}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("addPlaceholder"))}" aria-label="${escape(T("addPlaceholder"))}"><button type="button" data-act="addOption" aria-label="${escape(T("add"))}">${icon("add-outline")}</button></div>` : ""}
       <ul data-options></ul>
       <div class="footer" data-footer></div>`;
   }
@@ -534,8 +577,8 @@ class PollElement extends HTMLElement {
     if (!this.picker) {
       const today = todayOf();
       this.picker = datePicker({
-        lang: this.lang,
-        dir: dirOf(this.lang),
+        lang: this.language,
+        dir: dirOf(this.language),
         days: this.poll.options().map((one) => one.date),
         min: today,
         today,
@@ -556,8 +599,8 @@ class PollElement extends HTMLElement {
     header.innerHTML = `
       ${button("back", T("back"), "arrow-back-outline")}
       <h1 class="grow" data-name>${escape(name)}</h1>
-      ${this.mayLive && poll.hasHeader && !poll.readOnly ? `<button type="button" data-act="live" class="${live ? "on" : ""}" aria-pressed="${live ? "true" : "false"}" aria-label="${escape(live ? T("stopLive") : T("live"))}">🔄 ${escape(T("live"))}</button>` : ""}
-      ${poll.hasHeader ? button("send", T("send"), "send-outline") : ""}
+      ${this.mayLive && poll.hasHeader && !poll.readOnly ? `<button type="button" data-act="live" class="${live ? "on" : ""}" aria-pressed="${live ? "true" : "false"}" aria-label="${escape(live ? T("stopLive") : T("live"))}">${icon("sync-outline")}<span>${escape(T("live"))}</span></button>` : ""}
+      ${poll.hasHeader && this.inChat ? button("send", T("send"), "send-outline") : ""}
       ${button("close", T("close"), "close-outline")}`;
   }
 
@@ -566,20 +609,20 @@ class PollElement extends HTMLElement {
     const node = this.view?.querySelector("[data-status]");
     if (!node) return;
     const T = (key) => this.T(key);
-    const texts = {
-      waiting: T("waiting"),
-      joined: T("joined"),
-      silent: `${T("silent")} ${T("kept")}`,
-      unreachable: `${T("unreachable")} ${T("kept")}`,
-      left: `${T("left")} ${T("kept")}`,
-      outdated: T("outdated"),
-    };
-    node.textContent = texts[this.status] ?? "";
+    const said = {
+      waiting: ["sync-outline", T("waiting")],
+      joined: ["sync-outline", T("joined")],
+      silent: ["person-outline", `${T("silent")} ${T("kept")}`],
+      unreachable: ["cloud-offline-outline", `${T("unreachable")} ${T("kept")}`],
+      left: ["person-outline", `${T("left")} ${T("kept")}`],
+      outdated: ["download-outline", T("outdated")],
+    }[this.status];
+    node.innerHTML = said ? line(...said) : "";
   }
 
   paintWarning() {
     const node = this.view?.querySelector("[data-warning]");
-    if (node) node.textContent = this.keeper.full ? this.T("full") : "";
+    if (node) node.innerHTML = this.keeper.full ? line("alert-circle-outline", this.T("full")) : "";
   }
 
   paintInvite() {
@@ -589,7 +632,7 @@ class PollElement extends HTMLElement {
       node.innerHTML = "";
       return;
     }
-    node.innerHTML = `<span>${escape(this.T("joinPrompt", { name: this.invite.name }))}</span>
+    node.innerHTML = `<span>${line("sync-outline", this.T("joinPrompt", { name: this.invite.name }))}</span>
       <button type="button" data-act="join">${escape(this.T("join"))}</button>
       <button type="button" data-act="notNow">${escape(this.T("notNow"))}</button>`;
   }
@@ -616,16 +659,16 @@ class PollElement extends HTMLElement {
     const T = (key, holes) => this.T(key, holes);
     const calendar =
       this.poll.kind === "dates"
-        ? `<button type="button" data-act="icsSave" aria-label="${escape(T("icsSave"))}">📆 💾</button>
-           <button type="button" data-act="icsSend" aria-label="${escape(T("icsSend"))}">📆 📤</button>`
+        ? `<button type="button" data-act="icsSave" aria-label="${escape(T("icsSave"))}">${icon("calendar-outline")}${icon("download-outline")}</button>
+           ${this.inChat ? `<button type="button" data-act="icsSend" aria-label="${escape(T("icsSend"))}">${icon("calendar-outline")}${icon("send-outline")}</button>` : ""}`
         : "";
-    const note = { saved: T("icsSaved"), failed: T("icsFailed") }[this.icsNote] ?? "";
-    node.innerHTML = `<span class="chosen-text">${escape(T("chosen", { option: labelOf(chosen, this.lang) }))}</span>${calendar}<p data-ics-note role="status">${escape(note)}</p>`;
+    const note = { saved: line("calendar-outline", T("icsSaved")), failed: line("alert-circle-outline", T("icsFailed")) }[this.icsNote] ?? "";
+    node.innerHTML = `<span class="chosen-text">${line("flag-outline", T("chosen", { option: labelOf(chosen, this.language) }))}</span>${calendar}<p data-ics-note role="status">${note}</p>`;
   }
 
   /** A day in few words for a row, or the option's text. */
   rowLabel(option) {
-    return typeof option.date === "string" ? shortDay(option.date, this.lang) : option.text;
+    return typeof option.date === "string" ? shortDay(option.date, this.language) : option.text;
   }
 
   /** The other participants' answers on an option, as emoji, with a label to read them out. */
@@ -633,10 +676,10 @@ class PollElement extends HTMLElement {
     const poll = this.poll;
     const others = poll.participants().filter((who) => who !== poll.who);
     const answers = others.map((who) => poll.answerOf(who, option.id));
-    const shown = answers.length ? answers.map((answer) => EMOJI[answer]).join("") : EMOJI.none;
+    const shown = (answers.length ? answers : ["none"]).map((answer) => `<span data-answer="${answer}">${icon(ANSWER_ICON[answer][0])}</span>`).join("");
     const said = answers.filter((answer) => ANSWERED.includes(answer));
-    const label = said.length ? this.T("theirAnswer", { answer: said.map((answer) => EMOJI[answer]).join(" ") }) : this.T("theyHaventAnswered");
-    return `<span class="theirs" aria-label="${escape(label)}">${shown}</span>`;
+    const label = said.length ? this.T("theirAnswer", { answer: said.map((answer) => this.T(answer)).join(", ") }) : this.T("theyHaventAnswered");
+    return `<span class="theirs with" role="img" aria-label="${escape(label)}">${shown}</span>`;
   }
 
   paintOptions() {
@@ -654,14 +697,12 @@ class PollElement extends HTMLElement {
         const good = poll.goodForAll(option.id);
         const votes =
           editable && !this.choosing
-            ? `<span class="votes" role="group">${ANSWERED.map((answer) => `<button type="button" data-act="vote" data-id="${id}" data-answer="${answer}" aria-pressed="${mine === answer}" aria-label="${escape(T(answer))}">${EMOJI[answer]}</button>`).join("")}</span>`
-            : `<span class="mine">${EMOJI[mine]}</span>`;
-        const choose = editable && this.choosing ? `<button type="button" data-act="choose" data-id="${id}" aria-pressed="${this.closing === option.id}">🏁 ${escape(T("choose"))}</button>` : "";
+            ? `<span class="votes" role="group">${ANSWERED.map((answer) => `<button type="button" data-act="vote" data-id="${id}" data-answer="${answer}" aria-pressed="${mine === answer}" aria-label="${escape(T(answer))}">${icon(ANSWER_ICON[answer][mine === answer ? 1 : 0])}</button>`).join("")}</span>`
+            : `<span class="mine" data-answer="${mine}" role="img" aria-label="${escape(mine === "none" ? T("theyHaventAnswered") : T(mine))}">${icon(ANSWER_ICON[mine][1])}</span>`;
+        const choose = editable && this.choosing ? `<button type="button" data-act="choose" data-id="${id}" aria-pressed="${this.closing === option.id}">${icon("flag-outline")}<span>${escape(T("choose"))}</span></button>` : "";
         const remove = editable && !this.choosing && option.by === poll.who ? button("removeOption", T("remove"), "trash-outline", `class="plain" data-id="${id}"`) : "";
         return `<li data-option="${id}" data-good="${good}" class="${option.id === chosen ? "chosen" : ""}">
-          <span class="label">${escape(this.rowLabel(option))}</span>
-          ${good ? `<span class="badge">${escape(T("goodForBoth"))}</span>` : ""}
-          ${this.theirs(option)}${votes}${choose}${remove}</li>`;
+<span class="what"><span class="label">${escape(this.rowLabel(option))}</span>${good ? `<span class="badge">${line("star-outline", T("goodForBoth"))}</span>` : ""}</span><span class="acts">${this.theirs(option)}${votes}${choose}${remove}</span></li>`;
       })
       .join("");
   }
@@ -681,13 +722,13 @@ class PollElement extends HTMLElement {
     }
     const closing = this.closing ? poll.option(this.closing) : null;
     if (closing) {
-      node.innerHTML = `<span>${escape(T("confirmClose", { option: labelOf(closing, this.lang) }))}</span>
-        <button type="button" class="danger" data-act="confirmClose">🏁 ${escape(T("closePoll"))}</button>
+      node.innerHTML = `<span>${escape(T("confirmClose", { option: labelOf(closing, this.language) }))}</span>
+        <button type="button" class="danger" data-act="confirmClose">${icon("flag-outline")}<span>${escape(T("closePoll"))}</span></button>
         <button type="button" data-act="cancelClose">${escape(T("cancel"))}</button>`;
     } else if (this.choosing) {
       node.innerHTML = `<span>${escape(T("chooseHint"))}</span><button type="button" data-act="cancelChoose">${escape(T("cancel"))}</button>`;
     } else if (poll.options().length) {
-      node.innerHTML = `<button type="button" data-act="closePoll">🏁 ${escape(T("closePoll"))}</button>`;
+      node.innerHTML = `<button type="button" data-act="closePoll">${icon("flag-outline")}<span>${escape(T("closePoll"))}</span></button>`;
     } else {
       node.innerHTML = "";
     }

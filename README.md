@@ -5,19 +5,19 @@ people of a conversation, and send the chosen date to the calendar.
 
 ## What it does
 
-- **Two kinds of poll**: 📅 dates, picked on a calendar of several days, or 📝 text options.
-- **Votes**: each one marks ✅ (works for me), 🤔 (maybe) or ❌ (doesn't work) on every option, and
-  can take it back. Options where both said ✅ stand out ("✅ Good for both").
+- **Two kinds of poll**: dates, picked on a calendar of several days, or text options.
+- **Votes**: each one marks yes (works for me), maybe, or no (doesn't work) on every option, and
+  can take it back. Options where both said yes stand out ("Good for both").
 - **Anyone adds options**; whoever added an option can remove it. **Whoever created the poll closes
   it** by choosing one option, with a confirmation inside the plugin. After that nobody votes.
-- **🔄 Live**, from a conversation: the same poll on both phones, each vote on the other phone as it
+- **Live**, from a conversation: the same poll on both phones, each vote on the other phone as it
   happens. As in List, the other phone opens the poll by itself if Poll is open there; if it does
-  not answer within about 8 seconds, Poll says "👤 The other person doesn't have Poll open in this
+  not answer within about 8 seconds, Poll says "The other person doesn't have Poll open in this
   conversation. They may not have it, may not have allowed it, or may have it closed." It never
   claims that a vote arrived when it did not.
 - **Apart, then together**: what each one does with no connection, or with the poll closed, is kept
   on each phone and joins the other's the next time both have the poll open.
-- **📤** puts the result in the conversation's composer as text, in the language of whoever sends
+- **Send** puts the result in the conversation's composer as text, in the language of whoever sends
   it, for you to send:
 
   ```text
@@ -25,13 +25,17 @@ people of a conversation, and send the chosen date to the calendar.
   Let's meet on Saturday, October 10 (✅ both)
   ```
 
-- **📆 To the calendar**: once a date poll is closed, 📆 💾 saves the chosen day on the phone as a
-  calendar file (`.ics`), which the phone's calendar app opens and adds; 📆 📤 puts the same file in
+- **To the calendar**: once a date poll is closed, one button saves the chosen day on the phone as a
+  calendar file (`.ics`), which the phone's calendar app opens and adds; another puts the same file in
   the composer instead, so the other person can add it too.
 - **Each conversation its own polls**: opened in a chat, Poll shows only the polls of that chat.
   Opened outside a conversation (from Settings), it keeps polls on this phone only: they can be
-  made, voted and closed, and the chosen day saved to the calendar, but they never go live.
-- **21 languages**, right to left in Arabic (the calendar too), dark mode. Days are written by the
+  made, voted and closed, and the chosen day saved to the calendar, but they never go live
+  and nothing is sent to a chat: there is no conversation to propose anything to.
+- **Icons** are Ionicons, like the app's: the ones the app lends, and the rest carried inside the
+  bundle (MIT). The only emoji are in the text Poll proposes to the chat.
+- **21 languages**, right to left in Arabic (the calendar too), dark mode (the app's, through the
+  `dark` it hands over, or the system's). Days are written by the
   phone's `Intl`, and never move a day in another time zone.
 
 Not in this version: hours, hidden votes, deadlines and reminders, more than two people.
@@ -50,9 +54,9 @@ stored on any server.
   phones, end-to-end encrypted like every message, never through the mailbox. If the connection is
   relayed by our TURN server, the server sees that there is traffic, never its content.
 - Going live may wake the other phone with a push that carries no content.
-- What 📤 or 📆 📤 puts in the composer and you send is a message like any other. The calendar file
+- What Poll puts in the composer and you send is a message like any other. The calendar file
   carries the question and the day, nothing else: no names, no votes, no contacts. A file saved with
-  📆 💾 is a file on the phone like any other download.
+  the save button is a file on the phone like any other download.
 
 ## What it uses of the core
 
@@ -60,9 +64,9 @@ stored on any server.
 | ------------ | ------------------------------------------------------------------------------ |
 | `ft.records` | each poll in one record, `poll/<id>`, written on every change (`storage: small`, 4 MB) |
 | `ft.live`    | live voting, 1 to 1, in messages of at most 48 KiB (bigger ones go in parts)    |
-| `ft.say`     | 📤 (`send: propose`: the text lands in the composer and you send it)            |
-| `ft.save`    | 📆 💾: the `.ics` file (`text/calendar`) saved on the phone                     |
-| `ft.send`    | 📆 📤: the `.ics` file in the composer (`send: propose`)                         |
+| `ft.say`     | send the result (`send: propose`: the text lands in the composer and you send it) |
+| `ft.save`    | the `.ics` file (`text/calendar`) saved on the phone                             |
+| `ft.send`    | the `.ics` file in the composer (`send: propose`)                                |
 | `onOpen`     | `lang`, `live` (true only from a conversation, with live allowed) and `chat`    |
 
 Permissions: `{ "live": true, "send": "propose" }`. Needs FlickerTalk core **1.3.0**
@@ -144,4 +148,5 @@ the licences of the dependencies.
 
 ## Licence
 
-MIT. The bundle contains cally and atomico (MIT); their licences are in `THIRD_PARTY_NOTICES.md`.
+MIT. The bundle contains cally, atomico and Ionicons icons (all MIT); their licences are in
+`THIRD_PARTY_NOTICES.md`.

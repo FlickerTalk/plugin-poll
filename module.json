@@ -1,7 +1,7 @@
 {
   "id": "com.flickertalk.poll",
   "name": "Poll",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minCoreVersion": "1.3.0",
   "components": [
     "ft-poll"
@@ -10,5 +10,87 @@
     "live": true,
     "send": "propose"
   },
-  "summary": "Propose options or dates, vote between the two of you, and send the chosen date to the calendar."
+  "summary": "Propose options or dates, vote between the two of you, and send the chosen date to the calendar.",
+  "locales": {
+    "es": {
+      "name": "Encuestas",
+      "summary": "Propón opciones o fechas, vota con la otra persona y envía la fecha elegida al calendario."
+    },
+    "pt": {
+      "name": "Sondagens",
+      "summary": "Proponha opções ou datas, votem os dois e envie a data escolhida para o calendário."
+    },
+    "fr": {
+      "name": "Sondages",
+      "summary": "Proposez des options ou des dates, votez à deux et envoyez la date choisie au calendrier."
+    },
+    "de": {
+      "name": "Umfragen",
+      "summary": "Schlag Optionen oder Termine vor, stimmt zu zweit ab und schick den gewählten Termin in den Kalender."
+    },
+    "it": {
+      "name": "Sondaggi",
+      "summary": "Proponi opzioni o date, votate in due e manda la data scelta al calendario."
+    },
+    "ro": {
+      "name": "Sondaje",
+      "summary": "Propune opțiuni sau date, votați amândoi și trimite data aleasă în calendar."
+    },
+    "ru": {
+      "name": "Опросы",
+      "summary": "Предложите варианты или даты, проголосуйте вдвоём и отправьте выбранную дату в календарь."
+    },
+    "uk": {
+      "name": "Опитування",
+      "summary": "Запропонуйте варіанти чи дати, проголосуйте вдвох і надішліть вибрану дату в календар."
+    },
+    "pl": {
+      "name": "Ankiety",
+      "summary": "Zaproponuj opcje lub terminy, zagłosujcie we dwoje i wyślij wybrany termin do kalendarza."
+    },
+    "tr": {
+      "name": "Anketler",
+      "summary": "Seçenek ya da tarih öner, ikiniz arasında oylayın ve seçilen tarihi takvime gönder."
+    },
+    "ar": {
+      "name": "استطلاعات",
+      "summary": "اقترح خيارات أو تواريخ، وصوّتا بينكما، وأرسل التاريخ المختار إلى التقويم."
+    },
+    "hi": {
+      "name": "पोल",
+      "summary": "विकल्प या तारीखें सुझाएँ, आप दोनों आपस में वोट करें, और चुनी गई तारीख कैलेंडर में भेजें।"
+    },
+    "bn": {
+      "name": "পোল",
+      "summary": "বিকল্প বা তারিখ প্রস্তাব করুন, আপনারা দুজন ভোট দিন, আর বেছে নেওয়া তারিখ ক্যালেন্ডারে পাঠান।"
+    },
+    "id": {
+      "name": "Polling",
+      "summary": "Usulkan pilihan atau tanggal, lakukan voting berdua, lalu kirim tanggal terpilih ke kalender."
+    },
+    "vi": {
+      "name": "Bình chọn",
+      "summary": "Đề xuất lựa chọn hoặc ngày, hai người cùng bình chọn và gửi ngày đã chọn vào lịch."
+    },
+    "th": {
+      "name": "โพล",
+      "summary": "เสนอตัวเลือกหรือวันที่ โหวตกันสองคน แล้วส่งวันที่ที่เลือกไปยังปฏิทิน"
+    },
+    "ja": {
+      "name": "投票",
+      "summary": "選択肢や日程を提案し、ふたりで投票して、決まった日程をカレンダーに送れます。"
+    },
+    "ko": {
+      "name": "투표",
+      "summary": "선택지나 날짜를 제안하고 두 사람이 투표한 뒤, 정한 날짜를 캘린더로 보냅니다."
+    },
+    "zh-CN": {
+      "name": "投票",
+      "summary": "提出选项或日期，你们两人投票，再把选定的日期发送到日历。"
+    },
+    "zh-TW": {
+      "name": "投票",
+      "summary": "提出選項或日期，你們兩人投票，再把選定的日期傳送到行事曆。"
+    }
+  }
 }

@@ -9,6 +9,7 @@
 
 import "cally";
 import { isDay } from "./dates.js";
+import { icon } from "./icons.js";
 
 /** Which day a language starts its week on, as cally counts (0 is Sunday); Monday if unknown. */
 export function firstDayOf(lang) {
@@ -34,14 +35,15 @@ export function datePicker({ lang = "en", dir = "ltr", days = [], min, today, la
   if (min) calendar.setAttribute("min", min);
   if (today) calendar.setAttribute("today", today);
   const rtl = dir === "rtl";
-  for (const [slot, glyph] of [
-    ["previous", rtl ? "›" : "‹"],
-    ["next", rtl ? "‹" : "›"],
+  // Ionicon chevrons; in a right-to-left language "previous" points right.
+  for (const [slot, name] of [
+    ["previous", rtl ? "chevron-forward-outline" : "chevron-back-outline"],
+    ["next", rtl ? "chevron-back-outline" : "chevron-forward-outline"],
   ]) {
     const arrow = document.createElement("span");
     arrow.setAttribute("slot", slot);
     arrow.setAttribute("aria-label", labels[slot] ?? slot);
-    arrow.textContent = glyph;
+    arrow.innerHTML = icon(name);
     calendar.append(arrow);
   }
   calendar.append(document.createElement("calendar-month"));

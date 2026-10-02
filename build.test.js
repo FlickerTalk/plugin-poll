@@ -69,7 +69,8 @@ describe("the package", () => {
   it("carries the licence of everything inside the bundle", () => {
     const notices = readFileSync(join(DIST, "THIRD_PARTY_NOTICES.md"), "utf8");
     expect(notices).toBe(readFileSync(join(import.meta.dirname, "THIRD_PARTY_NOTICES.md"), "utf8"));
-    for (const name of ["cally 0.9.2", "atomico"]) expect(notices).toContain(name);
-    expect(notices.match(/Permission is hereby granted, free of charge/g).length).toBeGreaterThanOrEqual(2);
+    for (const name of ["cally 0.9.2", "atomico", "Ionicons 8.1.0"]) expect(notices).toContain(name);
+    expect(notices).toContain("Copyright (c) 2015-present Ionic");
+    expect(notices.match(/Permission is hereby granted, free of charge/g).length).toBeGreaterThanOrEqual(3);
   });
 });

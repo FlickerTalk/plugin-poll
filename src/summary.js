@@ -31,8 +31,8 @@ export function labelOf(option, lang, today = todayOf()) {
 function agreement(poll, id, lang) {
   const all = poll.participants();
   const { yes } = poll.tally(id);
-  if (poll.goodForAll(id)) return t(lang, all.length === 2 ? "both" : "everyone");
-  return t(lang, "some", { yes: number(lang, yes), total: number(lang, all.length) });
+  if (poll.goodForAll(id)) return t(lang, all.length === 2 ? "both" : "everyone", { mark: "✅" });
+  return t(lang, "some", { mark: "✅", yes: number(lang, yes), total: number(lang, all.length) });
 }
 
 export function summaryOf(poll, lang, { today = todayOf() } = {}) {

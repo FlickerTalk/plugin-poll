@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { calendarFile } from "./src/ics.js";
 import { FORMAT } from "./src/index.js";
 import { HELLO, UPDATE, VERSION, decode, encode, fromBase64 } from "./src/live.js";
+import { APP_ICONS, OWN_ICONS } from "./src/icons.js";
 import { Poll } from "./src/poll.js";
 import { NO_CHAT, recordKey } from "./src/store.js";
 import { connect, fakeCore } from "./test/fake-core.js";
@@ -149,7 +150,7 @@ describe("one phone", () => {
     await press(element, "choose", `[data-id="${optionId(element, "Mon, Oct 12")}"]`);
     await press(element, "confirmClose");
     expect(element.poll.closed).not.toBeNull();
-    expect(inside(element).querySelector("[data-banner]").textContent).toContain("🏁 Chosen: Monday, October 12");
+    expect(inside(element).querySelector("[data-banner]").textContent).toContain("Chosen: Monday, October 12");
     expect(inside(element).querySelector('[data-act="vote"]')).toBeNull();
     expect(inside(element).querySelector("[data-picker]")).toBeNull();
     expect(globalThis.confirm).not.toHaveBeenCalled();
@@ -292,8 +293,8 @@ describe("two phones", () => {
     expect(good(a, "Mon, Oct 12")).toBe(true);
     expect(good(b, "Mon, Oct 12")).toBe(true);
     expect(good(a, "Tue, Oct 13")).toBe(false);
-    expect(text(a)).toContain("✅ Good for both");
-    expect(inside(a).querySelector(`[data-option="${optionId(a, "Tue, Oct 13")}"] .theirs`).getAttribute("aria-label")).toBe("The other person: ❌");
+    expect(text(a)).toContain("Good for both");
+    expect(inside(a).querySelector(`[data-option="${optionId(a, "Tue, Oct 13")}"] .theirs`).getAttribute("aria-label")).toBe("The other person: Doesn't work for me");
     // The other phone can add a day; only the creator can close.
     await pick(b, "2026-10-12", "2026-10-13", "2026-10-20");
     await idle();
@@ -614,6 +615,92 @@ describe("the look", () => {
     expect(style).toMatch(/calendar-month\s*\{[^}]*inline-size:\s*100%/);
     expect(style).toMatch(/calendar-month::part\(table\)\s*\{[^}]*inline-size:\s*100%/);
     expect(style).not.toMatch(/\b(margin|padding)-(left|right)\b|\b(left|right):/);
+  });
+});
+
+describe("the icons", () => {
+  it("draws no emoji on any screen, only Ionicons lent by the app or carried, and every button says what it does", async () => {
+    const screens = [];
+    const look = (element, what) => {
+      const root = inside(element);
+      screens.push([what, root.innerHTML]);
+      for (const one of root.querySelectorAll("button")) {
+        const said = one.getAttribute("aria-label") || one.textContent.trim();
+        expect(said, `${what}: ${one.outerHTML.slice(0, 120)}`).toBeTruthy();
+      }
+    };
+    // One phone, outside a conversation.
+    const core = fakeCore();
+    const alone = await phone(core, { live: false });
+    look(alone, "home, empty, local");
+    await create(alone, "Dinner?");
+    look(alone, "date poll, no days");
+    await pick(alone, "2026-10-12", "2026-10-13");
+    await vote(alone, "Mon, Oct 12", "yes");
+    await vote(alone, "Tue, Oct 13", "maybe");
+    look(alone, "date poll with votes");
+    await press(alone, "closePoll");
+    look(alone, "choosing");
+    await press(alone, "choose");
+    look(alone, "confirming");
+    await press(alone, "confirmClose");
+    look(alone, "closed");
+    await press(alone, "icsSave");
+    look(alone, "calendar saved");
+    core.ft.save.mockResolvedValueOnce(false);
+    await press(alone, "icsSave");
+    look(alone, "calendar not saved");
+    alone.keeper.full = true;
+    alone.paintWarning();
+    look(alone, "no room");
+    await press(alone, "back");
+    look(alone, "home with a closed poll");
+    await create(alone, "Where?", "text");
+    await fill(alone, "add", "Sushi");
+    look(alone, "text poll");
+    alone.show(Poll.received("abc"));
+    look(alone, "waiting for a poll");
+    const newer = Poll.create({ kind: "text", question: "Newer" });
+    newer.data.schema = 2;
+    alone.show(newer);
+    look(alone, "read only");
+    // Two phones in a conversation, through every live state.
+    const { a, b, idle } = await shared();
+    await vote(a, "Mon, Oct 12", "no");
+    await vote(a, "Tue, Oct 13", "yes");
+    await vote(b, "Tue, Oct 13", "yes");
+    await idle();
+    look(a, "live, one good for both");
+    for (const status of ["waiting", "joined", "silent", "unreachable", "left", "outdated"]) {
+      a.status = status;
+      a.paintStatus();
+      look(a, `status ${status}`);
+    }
+    b.invite = { name: "Other", message: null };
+    b.paintInvite();
+    look(b, "invite");
+    const lent = new Set();
+    const drawn = new Set();
+    for (const [what, html] of screens) {
+      expect(html, what).not.toMatch(/\p{Extended_Pictographic}/u);
+      for (const match of html.matchAll(/\.\/icon\/([a-z-]+)\.svg/g)) lent.add(match[1]);
+      for (const match of html.matchAll(/data-icon="([a-z-]+)"/g)) drawn.add(match[1]);
+    }
+    for (const name of lent) expect(APP_ICONS, name).toContain(name);
+    for (const name of drawn) expect([...APP_ICONS, ...Object.keys(OWN_ICONS)], name).toContain(name);
+    for (const name of ["sync-outline", "calendar-outline", "list-outline", "flag-outline", "star-outline", "checkmark-circle", "help-circle-outline", "close-circle-outline", "person-outline", "cloud-offline-outline", "alert-circle-outline", "download-outline", "send-outline"]) {
+      expect(drawn, name).toContain(name);
+    }
+  });
+
+  it("marks the chosen vote by shape as well as colour", async () => {
+    const element = await phone(fakeCore(), { live: false });
+    await create(element, "Dinner?");
+    await pick(element, "2026-10-12");
+    await vote(element, "Mon, Oct 12", "maybe");
+    const row = inside(element).querySelector(`[data-option="${optionId(element, "Mon, Oct 12")}"]`);
+    const shapes = Object.fromEntries([...row.querySelectorAll('[data-act="vote"]')].map((one) => [one.dataset.answer, one.querySelector("[data-icon]").dataset.icon]));
+    expect(shapes).toEqual({ yes: "checkmark-circle-outline", maybe: "help-circle", no: "close-circle-outline" });
   });
 });
 

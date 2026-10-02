@@ -30,8 +30,10 @@ people of a conversation, and send the chosen date to the calendar.
   the composer instead, so the other person can add it too.
 - **Each conversation its own polls**: opened in a chat, Poll shows only the polls of that chat.
   Opened outside a conversation (from Settings), it keeps polls on this phone only: they can be
-  made, voted and closed, and the chosen day saved to the calendar, but they never go live.
-- **21 languages**, right to left in Arabic (the calendar too), dark mode. Days are written by the
+  made, voted and closed, and the chosen day saved to the calendar (📆 💾), but they never go live
+  and there is no 📤: there is no conversation to propose anything to.
+- **21 languages**, right to left in Arabic (the calendar too), dark mode (the app's, through the
+  `dark` it hands over, or the system's). Days are written by the
   phone's `Intl`, and never move a day in another time zone.
 
 Not in this version: hours, hidden votes, deadlines and reminders, more than two people.

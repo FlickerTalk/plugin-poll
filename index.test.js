@@ -158,7 +158,7 @@ describe("one phone", () => {
 
   it("proposes the result as text in the chat", async () => {
     const core = fakeCore();
-    const element = await phone(core, { live: false });
+    const element = await phone(core, { live: false, chat: CHAT_A });
     await create(element, "Cena", "dates");
     await pick(element, "2026-10-12");
     await vote(element, "Mon, Oct 12", "yes");
@@ -172,7 +172,7 @@ describe("one phone", () => {
 
   it("saves the chosen day as a calendar file, or sends it to the chat", async () => {
     const core = fakeCore();
-    const element = await phone(core, { live: false });
+    const element = await phone(core, { live: false, chat: CHAT_A });
     await create(element, "Dinner: Friday?");
     await pick(element, "2026-10-12");
     expect(inside(element).querySelector('[data-act="icsSave"]')).toBeNull();
@@ -354,7 +354,9 @@ describe("two phones", () => {
     const id = a.poll.id;
     await press(b, "close");
     await idle();
-    expect(statusOf(a)).toContain("closed the poll");
+    // Said as leaving the poll, never as closing it (closing is choosing the result).
+    expect(statusOf(a)).toContain("doesn't have the poll open any more");
+    expect(statusOf(a)).not.toMatch(/clos/i);
     await vote(a, "Mon, Oct 12", "yes");
     await idle();
     document.body.removeChild(b);
@@ -423,6 +425,42 @@ describe("two phones", () => {
 });
 
 describe("each conversation apart", () => {
+  it("outside a conversation offers nothing for the chat, and the view stays alive", async () => {
+    const core = fakeCore();
+    const element = await phone(core, { live: false });
+    await create(element, "Alone");
+    await pick(element, "2026-10-12");
+    expect(inside(element).querySelector('[data-act="send"]')).toBeNull();
+    await press(element, "closePoll");
+    await press(element, "choose");
+    await press(element, "confirmClose");
+    expect(inside(element).querySelector('[data-act="icsSend"]')).toBeNull();
+    expect(inside(element).querySelector('[data-act="send"]')).toBeNull();
+    await press(element, "icsSave");
+    expect(core.ft.save).toHaveBeenCalledTimes(1);
+    // Even if asked directly, nothing goes to a chat that is not there, and the poll stays on screen.
+    await element.sendSummary();
+    await element.sendCalendar();
+    await settle(element);
+    expect(core.ft.say).not.toHaveBeenCalled();
+    expect(core.ft.send).not.toHaveBeenCalled();
+    expect(element.poll?.question).toBe("Alone");
+    await press(element, "back");
+    expect(inside(element).querySelector('[data-act="open"] .title').textContent).toBe("Alone");
+  });
+
+  it("in a chat still offers 📤 and 📆 📤", async () => {
+    const core = fakeCore();
+    const element = await phone(core, { live: true, chat: CHAT_A });
+    await create(element, "Dinner?");
+    await pick(element, "2026-10-12");
+    expect(inside(element).querySelector('[data-act="send"]')).not.toBeNull();
+    await press(element, "closePoll");
+    await press(element, "choose");
+    await press(element, "confirmClose");
+    expect(inside(element).querySelector('[data-act="icsSend"]')).not.toBeNull();
+  });
+
   it("shows in a chat only that chat's polls, and none of them outside a conversation", async () => {
     const core = fakeCore();
     const one = chat("One");
@@ -551,6 +589,31 @@ describe("each conversation apart", () => {
     const file = new TextDecoder().decode(fromBase64(coreB.ft.save.mock.calls[0][2]));
     expect(file).toContain(`UID:${id}@poll.flickertalk`);
     for (const secret of [CHAT_A, CHAT_B]) for (const one of seen) expect(one).not.toContain(secret);
+  });
+});
+
+describe("the look", () => {
+  it("follows the app's dark mode with an attribute WebKit understands, the system's as a fallback", async () => {
+    const core = fakeCore();
+    const element = await phone(core, { live: false, dark: true });
+    expect(element.hasAttribute("dark")).toBe(true);
+    await core.open({ live: false, dark: false });
+    await flush();
+    expect(element.hasAttribute("dark")).toBe(false);
+    const css = inside(element).querySelector("style").textContent;
+    expect(css).toContain(":host([dark])");
+    expect(css).toContain("prefers-color-scheme: dark");
+    expect(css).not.toContain("host-context");
+  });
+
+  it("lets the calendar fill the width, in either direction", () => {
+    const css = document.createElement("ft-poll");
+    document.body.append(css);
+    const style = inside(css).querySelector("style").textContent;
+    expect(style).toMatch(/calendar-multi\s*\{[^}]*inline-size:\s*100%/);
+    expect(style).toMatch(/calendar-month\s*\{[^}]*inline-size:\s*100%/);
+    expect(style).toMatch(/calendar-month::part\(table\)\s*\{[^}]*inline-size:\s*100%/);
+    expect(style).not.toMatch(/\b(margin|padding)-(left|right)\b|\b(left|right):/);
   });
 });
 

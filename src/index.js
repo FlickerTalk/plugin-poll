@@ -39,8 +39,8 @@ const ANSWERED = ["yes", "maybe", "no"];
 
 const STYLE = `
 :host { display: block; font: 15px system-ui, sans-serif; color: #111; --paper: #fff; --line: #d8d8d8; --soft: #666; --accent: #e0562b; --good: #1f8a4c; --good-bg: #e6f5ec; }
+:host([dark]) { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --good: #6fd39b; --good-bg: #16301f; }
 @media (prefers-color-scheme: dark) { :host { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --good: #6fd39b; --good-bg: #16301f; } }
-:host-context([data-dark]) { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --good: #6fd39b; --good-bg: #16301f; }
 * { box-sizing: border-box; }
 .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0 8px; }
 .grow { flex: 1; min-width: 0; }
@@ -82,11 +82,12 @@ li .open { flex: 1; display: flex; flex-direction: column; align-items: flex-sta
 .confirm { flex-wrap: wrap; padding: 8px 0; }
 .confirm span { flex: 1 1 100%; }
 .empty { color: var(--soft); text-align: center; padding: 40px 0; }
-calendar-multi { display: block; margin: 4px 0; }
+calendar-multi { display: block; inline-size: 100%; margin: 4px 0; }
 calendar-multi::part(header) { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 calendar-multi::part(button) { appearance: none; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 10px; min-width: 44px; height: 44px; font: inherit; }
-calendar-month { width: 100%; }
-calendar-month::part(button) { min-width: 40px; height: 40px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; }
+calendar-month { display: block; inline-size: 100%; --color-accent: var(--accent); --color-text-on-accent: #fff; }
+calendar-month::part(table) { inline-size: 100%; table-layout: fixed; }
+calendar-month::part(button) { inline-size: 100%; min-inline-size: 36px; block-size: 40px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; }
 calendar-month::part(selected) { background: var(--accent); color: #fff; }
 calendar-month::part(today) { box-shadow: inset 0 0 0 1px currentColor; }
 calendar-month::part(disallowed) { opacity: .35; }
@@ -141,6 +142,11 @@ class PollElement extends HTMLElement {
     this.keeper.onFull(() => this.paintWarning());
   }
 
+  /** Whether the plugin was opened in a conversation, where 📤 has a composer to propose to. */
+  get inChat() {
+    return this.place !== NO_CHAT;
+  }
+
   T(key, holes = {}) {
     return t(this.lang, key, { app: APP_NAME, ...holes });
   }
@@ -149,6 +155,8 @@ class PollElement extends HTMLElement {
 
   async onOpen(opening) {
     this.lang = opening.lang || "en";
+    // The app's own mode, as an attribute: WebKit has no :host-context, so the style hangs on :host([dark]).
+    this.toggleAttribute("dark", Boolean(opening.dark));
     const place = placeOf(opening.chat);
     if (place !== this.place) {
       if (this.poll) await this.leave();
@@ -428,7 +436,8 @@ class PollElement extends HTMLElement {
 
   /** 📤: the result as text in the composer. The app closes the plugin, so leave cleanly first. */
   async sendSummary() {
-    if (!this.poll?.hasHeader) return;
+    // Outside a conversation there is no composer: `say` would do nothing after leaving.
+    if (!this.poll?.hasHeader || !this.inChat) return;
     const text = summaryOf(this.poll, this.lang);
     await this.leave();
     this.ft.say(text);
@@ -460,7 +469,7 @@ class PollElement extends HTMLElement {
   /** 📆 📤: the file in the composer, for the user to send. The app closes the plugin. */
   async sendCalendar() {
     const file = this.calendar();
-    if (!file) return;
+    if (!file || !this.inChat) return;
     await this.leave();
     this.ft.send(file.name, CALENDAR, file.data);
   }
@@ -557,7 +566,7 @@ class PollElement extends HTMLElement {
       ${button("back", T("back"), "arrow-back-outline")}
       <h1 class="grow" data-name>${escape(name)}</h1>
       ${this.mayLive && poll.hasHeader && !poll.readOnly ? `<button type="button" data-act="live" class="${live ? "on" : ""}" aria-pressed="${live ? "true" : "false"}" aria-label="${escape(live ? T("stopLive") : T("live"))}">🔄 ${escape(T("live"))}</button>` : ""}
-      ${poll.hasHeader ? button("send", T("send"), "send-outline") : ""}
+      ${poll.hasHeader && this.inChat ? button("send", T("send"), "send-outline") : ""}
       ${button("close", T("close"), "close-outline")}`;
   }
 
@@ -617,7 +626,7 @@ class PollElement extends HTMLElement {
     const calendar =
       this.poll.kind === "dates"
         ? `<button type="button" data-act="icsSave" aria-label="${escape(T("icsSave"))}">📆 💾</button>
-           <button type="button" data-act="icsSend" aria-label="${escape(T("icsSend"))}">📆 📤</button>`
+           ${this.inChat ? `<button type="button" data-act="icsSend" aria-label="${escape(T("icsSend"))}">📆 📤</button>` : ""}`
         : "";
     const note = { saved: T("icsSaved"), failed: T("icsFailed") }[this.icsNote] ?? "";
     node.innerHTML = `<span class="chosen-text">${escape(T("chosen", { option: labelOf(chosen, this.lang) }))}</span>${calendar}<p data-ics-note role="status">${escape(note)}</p>`;

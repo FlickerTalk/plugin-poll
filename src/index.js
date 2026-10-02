@@ -45,7 +45,7 @@ const ANSWER_ICON = {
 const ANSWERED = ["yes", "maybe", "no"];
 
 const STYLE = `
-:host { display: block; font: 15px system-ui, sans-serif; color: #111; --paper: #fff; --line: #d8d8d8; --soft: #666; --accent: #e0562b; --good: #1f8a4c; --good-bg: #e6f5ec; --maybe: #a86400; }
+:host { display: block; max-inline-size: 640px; margin-inline: auto; font: 15px system-ui, sans-serif; color: #111; --paper: #fff; --line: #d8d8d8; --soft: #666; --accent: #e0562b; --good: #1f8a4c; --good-bg: #e6f5ec; --maybe: #a86400; }
 :host([dark]) { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --good: #6fd39b; --good-bg: #16301f; --maybe: #f0b04c; }
 @media (prefers-color-scheme: dark) { :host { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --good: #6fd39b; --good-bg: #16301f; --maybe: #f0b04c; } }
 * { box-sizing: border-box; }
@@ -70,7 +70,7 @@ button .i { display: inline-block; vertical-align: middle; }
 [data-answer="yes"] { color: var(--good); }
 [data-answer="maybe"] { color: var(--maybe); }
 [data-answer="no"] { color: var(--accent); }
-form { display: flex; gap: 6px; align-items: center; margin: 0; }
+.entry { display: flex; gap: 6px; align-items: center; margin: 0; }
 input { flex: 1; min-width: 0; font: inherit; color: inherit; background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; height: 44px; }
 ul { list-style: none; margin: 8px 0 0; padding: 0; }
 li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border-bottom: 1px solid var(--line); min-height: 52px; padding: 6px 4px; }
@@ -146,7 +146,9 @@ class PollElement extends HTMLElement {
     this.root.innerHTML = `<style>${STYLE}</style><div class="view"></div>`;
     this.view = this.root.querySelector(".view");
     this.root.addEventListener("click", (event) => this.onClick(event));
-    this.root.addEventListener("submit", (event) => this.onSubmit(event));
+    // No <form>: the frame is sandboxed without `allow-forms`, and Android's WebView blocks a form
+    // submission before any `submit` event. A field is confirmed by its button or by Enter.
+    this.root.addEventListener("keydown", (event) => this.onKey(event));
     this.ft.onOpen((opening) => this.onOpen(opening));
     // The frame does not wait for one message to be handled before handing the next.
     this.ft.live?.onMessage?.(inOrder((data) => this.onLive(data)));
@@ -341,7 +343,7 @@ class PollElement extends HTMLElement {
     await this.session.hear(message);
   }
 
-  // ---- Clicks and forms ----
+  // ---- Clicks and fields ----
 
   async onClick(event) {
     const target = event.target.closest("button[data-act]");
@@ -398,6 +400,9 @@ class PollElement extends HTMLElement {
         if (!poll?.close(closing)) this.paintPoll();
         return;
       }
+      case "create":
+      case "addOption":
+        return this.confirmEntry(target.closest("[data-entry]"));
       case "live":
         return this.toggleLive();
       case "send":
@@ -419,13 +424,20 @@ class PollElement extends HTMLElement {
     }
   }
 
-  async onSubmit(event) {
-    const form = event.target.closest("form[data-form]");
-    if (!form) return;
+  /** Enter in a field confirms it, unless an input method is still composing a word. */
+  onKey(event) {
+    if (event.key !== "Enter" || event.isComposing) return;
+    const entry = event.target.closest?.("[data-entry]");
+    if (!entry) return;
     event.preventDefault();
-    const input = form.querySelector("input");
+    return this.confirmEntry(entry);
+  }
+
+  /** A field confirmed: the new poll's question, or a new text option. */
+  async confirmEntry(entry) {
+    const input = entry.querySelector("input");
     const value = input?.value ?? "";
-    if (form.dataset.form === "new") {
+    if (entry.dataset.entry === "new") {
       let poll;
       try {
         poll = Poll.create({ kind: this.newKind, question: value });
@@ -434,7 +446,7 @@ class PollElement extends HTMLElement {
       }
       await this.keeper.save(poll);
       this.show(poll);
-    } else if (form.dataset.form === "add" && this.poll?.addOption(value)) {
+    } else if (entry.dataset.entry === "add" && this.poll?.addOption(value)) {
       input.value = "";
       input.focus?.();
     }
@@ -531,7 +543,7 @@ class PollElement extends HTMLElement {
       <div class="bar"><h1 class="grow">${escape(T("title"))}</h1>${button("close", T("close"), "close-outline")}</div>
       ${this.place === NO_CHAT ? `<p class="hint" data-local>${line("phone-portrait-outline", T("localHome"))}</p>` : ""}
       <div class="kinds" role="group">${kind("dates", "calendar-outline")}${kind("text", "list-outline")}</div>
-      <form data-form="new"><input name="value" maxlength="${MAX_QUESTION}" autocomplete="off" placeholder="${escape(T("questionPlaceholder"))}" aria-label="${escape(T("questionPlaceholder"))}"><button type="submit" aria-label="${escape(T("create"))}">${icon("add-outline")}</button></form>
+      <div class="entry" data-entry="new"><input name="value" maxlength="${MAX_QUESTION}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("questionPlaceholder"))}" aria-label="${escape(T("questionPlaceholder"))}"><button type="button" data-act="create" aria-label="${escape(T("create"))}">${icon("add-outline")}</button></div>
       ${rows ? `<ul>${rows}</ul>` : `<p class="empty">${escape(T("empty"))}</p>`}`;
   }
 
@@ -549,7 +561,7 @@ class PollElement extends HTMLElement {
       ${poll.hasHeader ? "" : `<p class="empty" data-loading>${line("hourglass-outline", T("loading"))}</p>`}
       <div class="banner" data-banner></div>
       ${editable && poll.kind === "dates" ? `<p class="hint">${escape(T("pickDays"))}</p><div data-picker></div>` : ""}
-      ${editable && poll.kind === "text" ? `<form data-form="add"><input name="value" maxlength="${MAX_OPTION}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("addPlaceholder"))}" aria-label="${escape(T("addPlaceholder"))}"><button type="submit" aria-label="${escape(T("add"))}">${icon("add-outline")}</button></form>` : ""}
+      ${editable && poll.kind === "text" ? `<div class="entry" data-entry="add"><input name="value" maxlength="${MAX_OPTION}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("addPlaceholder"))}" aria-label="${escape(T("addPlaceholder"))}"><button type="button" data-act="addOption" aria-label="${escape(T("add"))}">${icon("add-outline")}</button></div>` : ""}
       <ul data-options></ul>
       <div class="footer" data-footer></div>`;
   }

@@ -48,11 +48,18 @@ async function press(element, act, extra = "") {
   button.click();
   await settle(element);
 }
-async function fill(element, form, value) {
-  const node = inside(element).querySelector(`form[data-form="${form}"]`);
-  if (!node) throw new Error(`no form ${form}`);
-  node.querySelector("input").value = value;
-  node.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+/**
+ * Types in a field and confirms it: by tapping its button, or with Enter. Never through a form
+ * `submit`: the plugin frame is `sandbox="allow-scripts"` without `allow-forms`, and Android's
+ * WebView blocks a form submission before any `submit` event (seen on the Samsung and the Lenovo).
+ */
+async function fill(element, entry, value, { by = "click" } = {}) {
+  const node = inside(element).querySelector(`[data-entry="${entry}"]`);
+  if (!node) throw new Error(`no field ${entry}`);
+  const input = node.querySelector("input");
+  input.value = value;
+  if (by === "enter") input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, composed: true, cancelable: true }));
+  else node.querySelector("button").click();
   await settle(element);
 }
 /** Creates a poll from the home screen. */
@@ -98,6 +105,30 @@ describe("the manifest", () => {
 });
 
 describe("one phone", () => {
+  it("creates a poll and adds options with a tap or with Enter, without any form", async () => {
+    const core = fakeCore();
+    const element = await phone(core, { live: false });
+    expect(inside(element).querySelector("form")).toBeNull();
+    await press(element, "kind", '[data-kind="text"]');
+    await fill(element, "new", "Where?", { by: "enter" });
+    expect(inside(element).querySelector("[data-name]").textContent).toBe("Where?");
+    expect(inside(element).querySelector("form")).toBeNull();
+    await fill(element, "add", "Sushi", { by: "enter" });
+    await fill(element, "add", "Pizza");
+    expect(labels(element)).toEqual(["Sushi", "Pizza"]);
+    expect(inside(element).querySelector('[data-entry="add"] input').value).toBe("");
+    // Enter while an input method is still composing a word does nothing yet.
+    const input = inside(element).querySelector('[data-entry="add"] input');
+    input.value = "Ramen";
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", isComposing: true, bubbles: true, composed: true }));
+    await settle(element);
+    expect(labels(element)).toEqual(["Sushi", "Pizza"]);
+    await press(element, "back");
+    await press(element, "kind", '[data-kind="dates"]');
+    await fill(element, "new", "Dinner?");
+    expect(inside(element).querySelector("[data-name]").textContent).toBe("Dinner?");
+  });
+
   it("makes a date poll: days from the calendar, in calendar order, votes, kept on every change", async () => {
     const core = fakeCore();
     const element = await phone(core, { live: false });
@@ -607,6 +638,14 @@ describe("the look", () => {
     expect(css).not.toContain("host-context");
   });
 
+  it("keeps the content to a comfortable width on a tablet, centred", () => {
+    const element = document.createElement("ft-poll");
+    document.body.append(element);
+    const style = inside(element).querySelector("style").textContent;
+    expect(style).toMatch(/:host\s*\{[^}]*max-inline-size:\s*640px/);
+    expect(style).toMatch(/:host\s*\{[^}]*margin-inline:\s*auto/);
+  });
+
   it("lets the calendar fill the width, in either direction", () => {
     const css = document.createElement("ft-poll");
     document.body.append(css);
@@ -683,6 +722,7 @@ describe("the icons", () => {
     const drawn = new Set();
     for (const [what, html] of screens) {
       expect(html, what).not.toMatch(/\p{Extended_Pictographic}/u);
+      expect(html, `${what}: a form, which the sandboxed frame blocks on Android`).not.toMatch(/<form\b/i);
       for (const match of html.matchAll(/\.\/icon\/([a-z-]+)\.svg/g)) lent.add(match[1]);
       for (const match of html.matchAll(/data-icon="([a-z-]+)"/g)) drawn.add(match[1]);
     }

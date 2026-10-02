@@ -63,9 +63,9 @@ describe("the package", () => {
     const element = document.createElement("ft-poll");
     document.body.append(element);
     await core.open({ live: false });
-    const form = element.shadowRoot.querySelector('form[data-form="new"]');
-    form.querySelector("input").value = "Dinner?";
-    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    const field = element.shadowRoot.querySelector('[data-entry="new"]');
+    field.querySelector("input").value = "Dinner?";
+    field.querySelector("button").click();
     for (let at = 0; at < 50; at += 1) await Promise.resolve();
     await element.keeper.settled();
     expect(element.shadowRoot.querySelector("[data-name]").textContent).toBe("Dinner?");

@@ -1,0 +1,20 @@
+{
+  "name": "@flickertalk/plugin-poll",
+  "private": true,
+  "version": "1.0.0",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "node build.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "atomico": "1.79.2",
+    "cally": "0.9.2"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "happy-dom": "20.14.5",
+    "vitest": "5.0.2"
+  }
+}

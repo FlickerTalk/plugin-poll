@@ -28,6 +28,9 @@ people of a conversation, and send the chosen date to the calendar.
 - **📆 To the calendar**: once a date poll is closed, 📆 💾 saves the chosen day on the phone as a
   calendar file (`.ics`), which the phone's calendar app opens and adds; 📆 📤 puts the same file in
   the composer instead, so the other person can add it too.
+- **Each conversation its own polls**: opened in a chat, Poll shows only the polls of that chat.
+  Opened outside a conversation (from Settings), it keeps polls on this phone only: they can be
+  made, voted and closed, and the chosen day saved to the calendar, but they never go live.
 - **21 languages**, right to left in Arabic (the calendar too), dark mode. Days are written by the
   phone's `Intl`, and never move a day in another time zone.
 
@@ -40,6 +43,9 @@ stored on any server.
 
 - Poll sees its own polls. It never sees the conversation, who the contact is, your calendar or
   anything else on the phone, and it has no network.
+- To keep each conversation's polls apart, the core gives Poll an opaque id of the conversation
+  (`chat`). It does not say who the contact is, it is different for each plugin, and it is this
+  phone's own: Poll never sends it, not over live, not in the text or the calendar file.
 - Live messages go through the core's `ft.live`: only over the direct connection between the two
   phones, end-to-end encrypted like every message, never through the mailbox. If the connection is
   relayed by our TURN server, the server sees that there is traffic, never its content.
@@ -57,10 +63,20 @@ stored on any server.
 | `ft.say`     | 📤 (`send: propose`: the text lands in the composer and you send it)            |
 | `ft.save`    | 📆 💾: the `.ics` file (`text/calendar`) saved on the phone                     |
 | `ft.send`    | 📆 📤: the `.ics` file in the composer (`send: propose`)                         |
-| `onOpen`     | `lang`, and `live` (true only from a conversation, with live allowed)           |
+| `onOpen`     | `lang`, `live` (true only from a conversation, with live allowed) and `chat`    |
 
-Permissions: `{ "live": true, "send": "propose" }`. Needs FlickerTalk core **1.1.0**
-(`minCoreVersion`). The contract is in [plugin-sdk](https://github.com/FlickerTalk/plugin-sdk).
+Permissions: `{ "live": true, "send": "propose" }`. Needs FlickerTalk core **1.3.0**
+(`minCoreVersion`), the first that gives `onOpen.chat`. The contract is in [plugin-sdk](https://github.com/FlickerTalk/plugin-sdk).
+
+## Where a poll is kept
+
+One record per poll, `poll/<place>/<id>`, in the plugin's `ft.records` (at most 113 bytes, under
+the core's 128). The place is the `chat` id from `onOpen` when it is exactly 43 characters of
+`A-Z a-z 0-9 _ -`; anything else, or none, is the place `local`, which can never be a chat id. Poll
+lists, loads, saves and deletes only inside the place it was opened in, so a poll of one
+conversation does not exist in another: a hello that resumes it there gets no answer, and a new
+hello with the same id makes a separate poll, which never mixes with the first. In `local` there
+is no live at all, and Poll also refuses live when the core says `live` without a `chat`.
 
 ## How a poll is kept
 
@@ -94,7 +110,7 @@ phone has none yet. Anything else in it is ignored.
 ## The live protocol
 
 Poll speaks the common live protocol of FlickerTalk's plugins (the one List defines; `src/live.js`
-is List's file, unchanged), with the format `"p": "ftpoll"`. The poll's state travels whole as `u`
+is List's file, unchanged), with the format `"p": "ftpoll"`, and only from a conversation. The poll's state travels whole as `u`
 inside `sync` and `update`; `have` (`sv`) is the whole state too, and a side answers only with what
 would change the other's. A poll already shared is only ever resumed with the same person.
 

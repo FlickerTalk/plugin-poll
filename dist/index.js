@@ -9,10 +9,14 @@ ${gt(e,"decidedDate",{day:i})} ${s}`:`\u{1F4DD} ${t.question}
 * { box-sizing: border-box; }
 .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0 8px; }
 .grow { flex: 1; min-width: 0; }
-h1 { font-size: 18px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+h1 { font-size: 18px; margin: 0; overflow-wrap: anywhere; }
+.head { padding: 4px 0 8px; }
+.head [data-title-row] { padding: 2px 0 6px; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.actions [data-act="close"] { margin-inline-start: auto; }
 button {
   appearance: none; border: 1px solid currentColor; background: transparent; color: inherit;
-  border-radius: 10px; min-width: 44px; height: 44px; font: inherit; padding: 0 10px; cursor: pointer; opacity: .8;
+  border-radius: 10px; min-width: 44px; min-height: 44px; font: inherit; padding: 0 10px; cursor: pointer; opacity: .8;
 }
 button.on, button[aria-pressed="true"] { opacity: 1; box-shadow: inset 0 0 0 2px currentColor; }
 button.danger { color: var(--accent); }
@@ -78,7 +82,7 @@ calendar-month::part(disallowed) { opacity: .35; }
       <div class="kinds" role="group">${o("dates","calendar-outline")}${o("text","list-outline")}</div>
       <div class="entry" data-entry="new"><input name="value" maxlength="${Z}" autocomplete="off" enterkeyhint="done" placeholder="${f(e("questionPlaceholder"))}" aria-label="${f(e("questionPlaceholder"))}"><button type="button" data-act="create" aria-label="${f(e("create"))}">${w("add-outline")}</button></div>
       ${n?`<ul>${n}</ul>`:`<p class="empty">${f(e("empty"))}</p>`}`}pollScreen(){let e=a=>this.T(a),n=this.poll,o=n.editable;return`
-      <div class="bar" data-header></div>
+      <div class="head" data-header></div>
       <p class="status" data-status aria-live="polite"></p>
       <p class="hint" data-hint>${this.mayLive?S("sync-outline",e("liveHint")):f(e("needsChat"))}</p>
       <p class="warn" data-warning role="alert"></p>
@@ -90,11 +94,13 @@ calendar-month::part(disallowed) { opacity: .35; }
       ${o&&n.kind==="text"?`<div class="entry" data-entry="add"><input name="value" maxlength="${Oe}" autocomplete="off" enterkeyhint="done" placeholder="${f(e("addPlaceholder"))}" aria-label="${f(e("addPlaceholder"))}"><button type="button" data-act="addOption" aria-label="${f(e("add"))}">${w("add-outline")}</button></div>`:""}
       <ul data-options></ul>
       <div class="footer" data-footer></div>`}mountPicker(){let e=this.view?.querySelector("[data-picker]");if(!(!e||!this.poll)){if(!this.picker){let n=ie();this.picker=hn({lang:this.language,dir:st(this.language),days:this.poll.options().map(o=>o.date),min:n,today:n,labels:{previous:this.T("previousMonth"),next:this.T("nextMonth")}}),this.picker.onChange(o=>this.picked(o))}e.append(this.picker.element)}}paintHeader(){let e=this.view?.querySelector("[data-header]");if(!e||!this.poll)return;let n=s=>this.T(s),o=this.poll,a=o.question||this.pendingTitle||n("received"),i=this.session&&(this.status==="joined"||this.status==="waiting");e.innerHTML=`
+      <div data-title-row><h1 data-name>${f(a)}</h1></div>
+      <div class="actions" data-actions>
       ${G("back",n("back"),"arrow-back-outline")}
-      <h1 class="grow" data-name>${f(a)}</h1>
       ${this.mayLive&&o.hasHeader&&!o.readOnly?`<button type="button" data-act="live" class="${i?"on":""}" aria-pressed="${i?"true":"false"}" aria-label="${f(n(i?"stopLive":"live"))}">${w("sync-outline")}<span>${f(n("live"))}</span></button>`:""}
       ${o.hasHeader&&this.inChat?G("send",n("send"),"send-outline"):""}
-      ${G("close",n("close"),"close-outline")}`}paintStatus(){this.paintHeader();let e=this.view?.querySelector("[data-status]");if(!e)return;let n=a=>this.T(a),o={waiting:["sync-outline",n("waiting")],joined:["sync-outline",n("joined")],silent:["person-outline",`${n("silent")} ${n("kept")}`],unreachable:["cloud-offline-outline",`${n("unreachable")} ${n("kept")}`],left:["person-outline",`${n("left")} ${n("kept")}`],outdated:["download-outline",n("outdated")]}[this.status];e.innerHTML=o?S(...o):""}paintWarning(){let e=this.view?.querySelector("[data-warning]");e&&(e.innerHTML=this.keeper.full?S("alert-circle-outline",this.T("full")):"")}paintInvite(){let e=this.view?.querySelector("[data-invite]");if(e){if(!this.invite){e.innerHTML="";return}e.innerHTML=`<span>${S("sync-outline",this.T("joinPrompt",{name:this.invite.name}))}</span>
+      ${G("close",n("close"),"close-outline")}
+      </div>`}paintStatus(){this.paintHeader();let e=this.view?.querySelector("[data-status]");if(!e)return;let n=a=>this.T(a),o={waiting:["sync-outline",n("waiting")],joined:["sync-outline",n("joined")],silent:["person-outline",`${n("silent")} ${n("kept")}`],unreachable:["cloud-offline-outline",`${n("unreachable")} ${n("kept")}`],left:["person-outline",`${n("left")} ${n("kept")}`],outdated:["download-outline",n("outdated")]}[this.status];e.innerHTML=o?S(...o):""}paintWarning(){let e=this.view?.querySelector("[data-warning]");e&&(e.innerHTML=this.keeper.full?S("alert-circle-outline",this.T("full")):"")}paintInvite(){let e=this.view?.querySelector("[data-invite]");if(e){if(!this.invite){e.innerHTML="";return}e.innerHTML=`<span>${S("sync-outline",this.T("joinPrompt",{name:this.invite.name}))}</span>
       <button type="button" data-act="join">${f(this.T("join"))}</button>
       <button type="button" data-act="notNow">${f(this.T("notNow"))}</button>`}}paintPoll(){if(!this.poll||this.screen!=="poll")return;let e=this.view.querySelector("[data-name]");e&&(e.textContent=this.poll.question||this.pendingTitle||this.T("received")),this.paintBanner(),this.paintOptions(),this.paintFooter(),this.picker?.setDays(this.poll.options().map(n=>n.date))}paintBanner(){let e=this.view?.querySelector("[data-banner]");if(!e||!this.poll)return;let n=this.poll.chosen();if(!n){e.innerHTML="";return}let o=(s,r)=>this.T(s,r),a=this.poll.kind==="dates"?`<button type="button" data-act="icsSave" aria-label="${f(o("icsSave"))}">${w("calendar-outline")}${w("download-outline")}</button>
            ${this.inChat?`<button type="button" data-act="icsSend" aria-label="${f(o("icsSend"))}">${w("calendar-outline")}${w("send-outline")}</button>`:""}`:"",i={saved:S("calendar-outline",o("icsSaved")),failed:S("alert-circle-outline",o("icsFailed"))}[this.icsNote]??"";e.innerHTML=`<span class="chosen-text">${S("flag-outline",o("chosen",{option:he(n,this.language)}))}</span>${a}<p data-ics-note role="status">${i}</p>`}rowLabel(e){return typeof e.date=="string"?ln(e.date,this.language):e.text}theirs(e){let n=this.poll,a=n.participants().filter(l=>l!==n.who).map(l=>n.answerOf(l,e.id)),i=(a.length?a:["none"]).map(l=>`<span data-answer="${l}">${w(yt[l][0])}</span>`).join(""),s=a.filter(l=>$n.includes(l)),r=s.length?this.T("theirAnswer",{answer:s.map(l=>this.T(l)).join(", ")}):this.T("theyHaventAnswered");return`<span class="theirs with" role="img" aria-label="${f(r)}">${i}</span>`}paintOptions(){let e=this.view?.querySelector("[data-options]");if(!e||!this.poll)return;let n=(s,r)=>this.T(s,r),o=this.poll,a=o.editable,i=o.closed?.opt;e.innerHTML=o.options().map(s=>{let r=f(s.id),l=o.answerOf(o.who,s.id),d=o.goodForAll(s.id),c=a&&!this.choosing?`<span class="votes" role="group">${$n.map(p=>`<button type="button" data-act="vote" data-id="${r}" data-answer="${p}" aria-pressed="${l===p}" aria-label="${f(n(p))}">${w(yt[p][l===p?1:0])}</button>`).join("")}</span>`:`<span class="mine" data-answer="${l}" role="img" aria-label="${f(n(l==="none"?"theyHaventAnswered":l))}">${w(yt[l][1])}</span>`,u=a&&this.choosing?`<button type="button" data-act="choose" data-id="${r}" aria-pressed="${this.closing===s.id}">${w("flag-outline")}<span>${f(n("choose"))}</span></button>`:"",h=a&&!this.choosing&&s.by===o.who?G("removeOption",n("remove"),"trash-outline",`class="plain" data-id="${r}"`):"";return`<li data-option="${r}" data-good="${d}" class="${s.id===i?"chosen":""}">

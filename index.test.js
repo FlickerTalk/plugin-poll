@@ -94,7 +94,8 @@ describe("the manifest", () => {
     expect(manifest).toEqual({
       id: "com.flickertalk.poll",
       name: "Poll",
-      version: "1.0.1",
+      version: "1.0.2",
+      icon: "stats-chart-outline",
       minCoreVersion: "1.3.0",
       components: ["ft-poll"],
       permissions: { live: true, send: "propose" },

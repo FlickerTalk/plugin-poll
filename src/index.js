@@ -66,6 +66,8 @@ ft-poll button.plain { border: 0; }
 ft-poll .i { display: block; width: 22px; height: 22px; margin: auto; background: currentColor; -webkit-mask: var(--i) center/contain no-repeat; mask: var(--i) center/contain no-repeat; }
 ft-poll .i.svg { background: none; -webkit-mask: none; mask: none; }
 ft-poll .i.svg svg { display: block; width: 100%; height: 100%; fill: currentColor; }
+ft-poll ion-button .i[slot="start"] { margin-inline-end: 6px; }
+ft-poll ion-button .i[slot="end"] { margin-inline-start: 6px; }
 ft-poll .with { display: inline-flex; gap: 6px; align-items: center; }
 ft-poll .with .i { flex: none; width: 18px; height: 18px; margin: 0; }
 ft-poll button .i + span, ft-poll button .i + .i { margin-inline-start: 4px; }

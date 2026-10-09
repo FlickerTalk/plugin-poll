@@ -69,8 +69,12 @@ stored on any server.
 | `ft.send`    | the `.ics` file in the composer (`send: propose`)                                |
 | `onOpen`     | `lang`, `live` (true only from a conversation, with live allowed) and `chat`    |
 
-Permissions: `{ "live": true, "send": "propose" }`. Needs FlickerTalk core **1.3.0**
-(`minCoreVersion`), the first that gives `onOpen.chat`. The contract is in [plugin-sdk](https://github.com/FlickerTalk/plugin-sdk).
+Permissions: `{ "live": true, "send": "propose" }`. Needs FlickerTalk core **1.6.0**
+(`minCoreVersion`), the first that lends Ionic to the plugin frame: since 1.0.3 Poll's screens sit
+in Ionic's `ion-header > ion-toolbar` and `ion-content`, with `ion-button`s, so it looks like the rest
+of FlickerTalk; the package carries no Ionic (`@ionic/core` is only a devDependency, so the tests
+draw what the phone draws). The way out is the app's ✕: Poll says goodbye to the other phone from
+`ft.onClose`. The contract is in [plugin-sdk](https://github.com/FlickerTalk/plugin-sdk).
 
 ## Where a poll is kept
 

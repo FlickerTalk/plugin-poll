@@ -36,8 +36,8 @@ const escape = (text) => String(text).replace(/[&<>"']/g, (one) => ({ "&": "&amp
  * The markup of an icon. Alone it is decoration (`aria-hidden`); with `label` it is an image a
  * screen reader names. A button that is only an icon keeps its own `aria-label`.
  */
-export function icon(name, { label } = {}) {
-  const a11y = label ? `role="img" aria-label="${escape(label)}"` : `aria-hidden="true"`;
+export function icon(name, { label, slot } = {}) {
+  const a11y = (label ? `role="img" aria-label="${escape(label)}"` : `aria-hidden="true"`) + (slot ? ` slot="${slot}"` : "");
   if (APP_ICONS.includes(name)) return `<i class="i" data-icon="${name}" style="--i:url(./icon/${name}.svg)" ${a11y}></i>`;
   if (Object.hasOwn(OWN_ICONS, name)) return `<span class="i svg" data-icon="${name}" ${a11y}>${OWN_ICONS[name]}</span>`;
   throw new Error(`no icon ${name}`);

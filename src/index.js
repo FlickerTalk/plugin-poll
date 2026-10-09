@@ -44,88 +44,93 @@ const ANSWER_ICON = {
 };
 const ANSWERED = ["yes", "maybe", "no"];
 
+// Ionic draws the window (the app lends it to the frame, app 1.6.0): header, toolbars, buttons and
+// the scrolling content. This is only what is the poll's own, with the app's colours through
+// Ionic's variables.
 const STYLE = `
-:host { display: block; max-inline-size: 640px; margin-inline: auto; font: 15px system-ui, sans-serif; color: #111; --paper: #fff; --line: #d8d8d8; --soft: #666; --accent: #e0562b; --good: #1f8a4c; --good-bg: #e6f5ec; --maybe: #a86400; }
-:host([dark]) { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --good: #6fd39b; --good-bg: #16301f; --maybe: #f0b04c; }
-@media (prefers-color-scheme: dark) { :host { color: #f4f4f4; --paper: #111; --line: #3a3a3a; --soft: #aaa; --good: #6fd39b; --good-bg: #16301f; --maybe: #f0b04c; } }
-* { box-sizing: border-box; }
-.bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0 8px; }
-.grow { flex: 1; min-width: 0; }
-h1 { font-size: 18px; margin: 0; overflow-wrap: anywhere; }
-.head { padding: 4px 0 8px; }
-.head [data-title-row] { padding: 2px 0 6px; }
-.actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.actions [data-act="close"] { margin-inline-start: auto; }
-button {
+ft-poll { display: flex; flex-direction: column; height: 100%; font: 15px system-ui, sans-serif; color: var(--ion-text-color, #111); --paper: var(--ion-background-color, #fff); --line: var(--ion-border-color, #d8d8d8); --soft: var(--ion-color-medium, #666); --accent: var(--ion-color-danger, #e0562b); --good: #1f8a4c; --good-bg: #e6f5ec; --maybe: #a86400; }
+ft-poll[dark] { color: var(--ion-text-color, #f4f4f4); --paper: var(--ion-background-color, #111); --line: var(--ion-border-color, #3a3a3a); --soft: var(--ion-color-medium, #aaa); --good: #6fd39b; --good-bg: #16301f; --maybe: #f0b04c; }
+@media (prefers-color-scheme: dark) { ft-poll { color: var(--ion-text-color, #f4f4f4); --paper: var(--ion-background-color, #111); --line: var(--ion-border-color, #3a3a3a); --soft: var(--ion-color-medium, #aaa); --good: #6fd39b; --good-bg: #16301f; --maybe: #f0b04c; } }
+ft-poll * { box-sizing: border-box; }
+ft-poll ion-content { flex: 1; }
+ft-poll .view { max-inline-size: 640px; margin-inline: auto; padding-inline: 8px; padding-block-end: 16px; }
+ft-poll h1 { font-size: 18px; margin: 0; padding-block: 8px; padding-inline: 16px; overflow-wrap: anywhere; }
+ft-poll .actions { flex-wrap: wrap; }
+ft-poll button {
   appearance: none; border: 1px solid currentColor; background: transparent; color: inherit;
   border-radius: 10px; min-width: 44px; min-height: 44px; font: inherit; padding: 0 10px; cursor: pointer; opacity: .8;
 }
-button.on, button[aria-pressed="true"] { opacity: 1; box-shadow: inset 0 0 0 2px currentColor; }
-button.danger { color: var(--accent); }
-button.plain { border: 0; }
-.i { display: block; width: 22px; height: 22px; margin: auto; background: currentColor; -webkit-mask: var(--i) center/contain no-repeat; mask: var(--i) center/contain no-repeat; }
-.i.svg { background: none; -webkit-mask: none; mask: none; }
-.i.svg svg { display: block; width: 100%; height: 100%; fill: currentColor; }
-.with { display: inline-flex; gap: 6px; align-items: center; }
-.with .i { flex: none; width: 18px; height: 18px; margin: 0; }
-button .i + span, button .i + .i { margin-inline-start: 4px; }
-button:has(span) { display: inline-flex; align-items: center; }
-button .i { display: inline-block; vertical-align: middle; }
-[data-answer="yes"] { color: var(--good); }
-[data-answer="maybe"] { color: var(--maybe); }
-[data-answer="no"] { color: var(--accent); }
-.entry { display: flex; gap: 6px; align-items: center; margin: 0; }
-input { flex: 1; min-width: 0; font: inherit; color: inherit; background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; height: 44px; }
-ul { list-style: none; margin: 8px 0 0; padding: 0; }
-li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border-bottom: 1px solid var(--line); min-height: 52px; padding: 6px 4px; }
-li[data-good="true"] { background: var(--good-bg); }
-li.chosen { box-shadow: inset 4px 0 0 var(--good); }
-li .open { flex: 1; display: flex; flex-direction: column; align-items: flex-start; text-align: start; border: 0; border-radius: 0; height: auto; padding: 10px 4px; opacity: 1; }
-.title { font-weight: 600; }
-.meta { color: var(--soft); font-size: 13px; }
-.label { overflow-wrap: anywhere; }
-li[data-option] { flex-wrap: wrap; column-gap: 6px; row-gap: 2px; }
-.what { flex: 1 1 3.5em; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
-.acts { display: flex; flex-wrap: nowrap; flex: none; margin-inline-start: auto; align-items: center; gap: 2px; }
-.badge { color: var(--good); font-size: 13px; font-weight: 600; }
-.theirs, .mine { min-width: 24px; justify-content: center; }
-.votes { display: flex; gap: 2px; }
-.votes button { min-width: 44px; padding: 0; }
-.status, .hint, .warn, .note { margin: 4px 0; }
-.status:empty, .warn:empty, .note:empty { display: none; }
-.hint, .note { color: var(--soft); font-size: 13px; }
-.warn { color: var(--accent); }
-.invite, .banner, .footer { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
-.invite, .banner { padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
-.invite:empty, .banner:empty, .footer:empty { display: none; }
-.invite span, .banner .chosen-text, .footer span { flex: 1 1 60%; }
-.banner .chosen-text { font-weight: 600; }
-.banner p { flex: 1 1 100%; margin: 0; color: var(--soft); font-size: 13px; }
-.banner p:empty { display: none; }
-.kinds { display: flex; gap: 6px; margin: 0 0 6px; }
-.confirm { flex-wrap: wrap; padding: 8px 0; }
-.confirm span { flex: 1 1 100%; }
-.empty { color: var(--soft); text-align: center; padding: 40px 0; }
-calendar-multi { display: block; inline-size: 100%; margin: 4px 0; }
-calendar-multi::part(header) { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-calendar-multi::part(button) { appearance: none; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 10px; min-width: 44px; height: 44px; font: inherit; }
-calendar-month { display: block; inline-size: 100%; --color-accent: var(--accent); --color-text-on-accent: #fff; }
-calendar-month::part(table) { inline-size: 100%; table-layout: fixed; }
-calendar-month::part(button) { inline-size: 100%; min-inline-size: 36px; block-size: 40px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; }
-calendar-month::part(selected) { background: var(--accent); color: #fff; }
-calendar-month::part(today) { box-shadow: inset 0 0 0 1px currentColor; }
-calendar-month::part(disallowed) { opacity: .35; }
+ft-poll button.on, ft-poll button[aria-pressed="true"] { opacity: 1; box-shadow: inset 0 0 0 2px currentColor; }
+ft-poll button.danger { color: var(--accent); }
+ft-poll button.plain { border: 0; }
+ft-poll .i { display: block; width: 22px; height: 22px; margin: auto; background: currentColor; -webkit-mask: var(--i) center/contain no-repeat; mask: var(--i) center/contain no-repeat; }
+ft-poll .i.svg { background: none; -webkit-mask: none; mask: none; }
+ft-poll .i.svg svg { display: block; width: 100%; height: 100%; fill: currentColor; }
+ft-poll ion-button .i[slot="start"] { margin-inline-end: 6px; }
+ft-poll ion-button .i[slot="end"] { margin-inline-start: 6px; }
+ft-poll .with { display: inline-flex; gap: 6px; align-items: center; }
+ft-poll .with .i { flex: none; width: 18px; height: 18px; margin: 0; }
+ft-poll button .i + span, ft-poll button .i + .i { margin-inline-start: 4px; }
+ft-poll button:has(span) { display: inline-flex; align-items: center; }
+ft-poll button .i { display: inline-block; vertical-align: middle; }
+ft-poll [data-answer="yes"] { color: var(--good); }
+ft-poll [data-answer="maybe"] { color: var(--maybe); }
+ft-poll [data-answer="no"] { color: var(--accent); }
+ft-poll .entry { display: flex; gap: 6px; align-items: center; margin: 0; }
+ft-poll input { flex: 1; min-width: 0; font: inherit; color: inherit; background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; height: 44px; }
+ft-poll ul { list-style: none; margin: 8px 0 0; padding: 0; }
+ft-poll li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border-bottom: 1px solid var(--line); min-height: 52px; padding: 6px 4px; }
+ft-poll li[data-good="true"] { background: var(--good-bg); }
+ft-poll li.chosen { box-shadow: inset 4px 0 0 var(--good); }
+ft-poll li .open { flex: 1; display: flex; flex-direction: column; align-items: flex-start; text-align: start; border: 0; border-radius: 0; height: auto; padding: 10px 4px; opacity: 1; }
+ft-poll .title { font-weight: 600; }
+ft-poll .meta { color: var(--soft); font-size: 13px; }
+ft-poll .label { overflow-wrap: anywhere; }
+ft-poll li[data-option] { flex-wrap: wrap; column-gap: 6px; row-gap: 2px; }
+ft-poll .what { flex: 1 1 3.5em; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+ft-poll .acts { display: flex; flex-wrap: nowrap; flex: none; margin-inline-start: auto; align-items: center; gap: 2px; }
+ft-poll .badge { color: var(--good); font-size: 13px; font-weight: 600; }
+ft-poll .theirs, ft-poll .mine { min-width: 24px; justify-content: center; }
+ft-poll .votes { display: flex; gap: 2px; }
+ft-poll .votes button { min-width: 44px; padding: 0; }
+ft-poll .status, ft-poll .hint, ft-poll .warn, ft-poll .note { margin: 4px 0; }
+ft-poll .status:empty, ft-poll .warn:empty, ft-poll .note:empty { display: none; }
+ft-poll .hint, ft-poll .note { color: var(--soft); font-size: 13px; }
+ft-poll .warn { color: var(--accent); }
+ft-poll .invite, ft-poll .banner, ft-poll .footer { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
+ft-poll .invite, ft-poll .banner { padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
+ft-poll .invite:empty, ft-poll .banner:empty, ft-poll .footer:empty { display: none; }
+ft-poll .invite span, ft-poll .banner .chosen-text, ft-poll .footer span { flex: 1 1 60%; }
+ft-poll .banner .chosen-text { font-weight: 600; }
+ft-poll .banner p { flex: 1 1 100%; margin: 0; color: var(--soft); font-size: 13px; }
+ft-poll .banner p:empty { display: none; }
+ft-poll .kinds { display: flex; gap: 6px; margin: 0 0 6px; }
+ft-poll .confirm { flex-wrap: wrap; padding: 8px 0; }
+ft-poll .confirm span { flex: 1 1 100%; }
+ft-poll .empty { color: var(--soft); text-align: center; padding: 40px 0; }
+ft-poll calendar-multi { display: block; inline-size: 100%; margin: 4px 0; }
+ft-poll calendar-multi::part(header) { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+ft-poll calendar-multi::part(button) { appearance: none; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 10px; min-width: 44px; height: 44px; font: inherit; }
+ft-poll calendar-month { display: block; inline-size: 100%; --color-accent: var(--accent); --color-text-on-accent: #fff; }
+ft-poll calendar-month::part(table) { inline-size: 100%; table-layout: fixed; }
+ft-poll calendar-month::part(button) { inline-size: 100%; min-inline-size: 36px; block-size: 40px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; }
+ft-poll calendar-month::part(selected) { background: var(--accent); color: #fff; }
+ft-poll calendar-month::part(today) { box-shadow: inset 0 0 0 1px currentColor; }
+ft-poll calendar-month::part(disallowed) { opacity: .35; }
 `;
 
 /** A text with its icon beside it; the icon is decoration, the text says it. */
 const line = (name, text) => (text ? `<span class="with">${icon(name)}<span>${escape(text)}</span></span>` : "");
+/** A plain button with an icon only: the rows of a poll, repainted at every change. */
 const button = (act, label, name, extra = "") => `<button type="button" data-act="${act}" aria-label="${escape(label)}" ${extra}>${icon(name)}</button>`;
+/** An Ionic button with an icon only. */
+const ionButton = (act, label, name, extra = "") =>
+  `<ion-button ${/\bfill=/.test(extra) ? "" : 'fill="clear"'} data-act="${act}" aria-label="${escape(label)}" ${extra}>${icon(name, { slot: "icon-only" })}</ion-button>`;
 
 /** The plugin's view: the polls this phone keeps, or one poll. */
 class PollElement extends HTMLElement {
   constructor() {
     super();
-    this.root = this.attachShadow({ mode: "open" });
     // Not `this.lang`: that is the reflected `lang` attribute, which a constructor may not add.
     this.language = "en";
     this.mayLive = false;
@@ -151,13 +156,17 @@ class PollElement extends HTMLElement {
     this.ft = globalThis.ft;
     this.useKeeper(NO_CHAT);
     this.inbox = new Inbox(FORMAT);
-    this.root.innerHTML = `<style>${STYLE}</style><div class="view"></div>`;
-    this.view = this.root.querySelector(".view");
-    this.root.addEventListener("click", (event) => this.onClick(event));
+    // In the page, not in a shadow root: the frame holds only this plugin, and Ionic's global
+    // styles do not cross a shadow boundary. `view` is the element itself: each screen is a
+    // header and a content of its own.
+    this.view = this;
+    this.addEventListener("click", (event) => this.onClick(event));
     // No <form>: the frame is sandboxed without `allow-forms`, and Android's WebView blocks a form
     // submission before any `submit` event. A field is confirmed by its button or by Enter.
-    this.root.addEventListener("keydown", (event) => this.onKey(event));
+    this.addEventListener("keydown", (event) => this.onKey(event));
     this.ft.onOpen((opening) => this.onOpen(opening));
+    // The way out is the app's ✕ (or Android's Back): the goodbye to the twin goes then.
+    this.ft.onClose?.(() => this.leave());
     // The frame does not wait for one message to be handled before handing the next.
     this.ft.live?.onMessage?.(inOrder((data) => this.onLive(data)));
     this.paint();
@@ -354,14 +363,11 @@ class PollElement extends HTMLElement {
   // ---- Clicks and fields ----
 
   async onClick(event) {
-    const target = event.target.closest("button[data-act]");
+    const target = event.target.closest("button[data-act], ion-button[data-act]");
     if (!target) return;
     const { act, id } = target.dataset;
     const poll = this.poll;
     switch (act) {
-      case "close":
-        await this.leave();
-        return this.ft.close();
       case "back":
         return this.home();
       case "kind":
@@ -518,7 +524,7 @@ class PollElement extends HTMLElement {
     if (!this.view) return;
     if (this.screen === "poll" && this.poll) {
       this.paintedAs = this.shapeOf(this.poll);
-      this.view.innerHTML = this.pollScreen();
+      this.view.innerHTML = `<style>${STYLE}</style>${this.pollScreen()}`;
       this.paintHeader();
       this.paintStatus();
       this.paintWarning();
@@ -526,7 +532,7 @@ class PollElement extends HTMLElement {
       this.mountPicker();
       this.paintPoll();
     } else {
-      this.view.innerHTML = this.homeScreen();
+      this.view.innerHTML = `<style>${STYLE}</style>${this.homeScreen()}`;
     }
   }
 
@@ -536,8 +542,8 @@ class PollElement extends HTMLElement {
       .map((meta) => {
         if (this.confirming === meta.id) {
           return `<li class="confirm"><span>${escape(T("confirmDelete", { name: meta.question }))}</span>
-            <button type="button" class="danger" data-act="confirmDelete" data-id="${escape(meta.id)}">${escape(T("delete"))}</button>
-            <button type="button" data-act="cancelDelete">${escape(T("cancel"))}</button></li>`;
+            <ion-button color="danger" data-act="confirmDelete" data-id="${escape(meta.id)}">${escape(T("delete"))}</ion-button>
+            <ion-button fill="outline" data-act="cancelDelete">${escape(T("cancel"))}</ion-button></li>`;
         }
         const kind = meta.kind === "dates" ? line("calendar-outline", T("kindDates")) : line("list-outline", T("kindText"));
         const closed = meta.closed ? line("flag-outline", T("closedTag")) : "";
@@ -546,13 +552,15 @@ class PollElement extends HTMLElement {
           ${button("delete", T("delete"), "trash-outline", `data-id="${escape(meta.id)}"`)}</li>`;
       })
       .join("");
-    const kind = (name, drawn) => `<button type="button" data-act="kind" data-kind="${name}" aria-pressed="${this.newKind === name}">${icon(drawn)}<span>${escape(T(name === "dates" ? "kindDates" : "kindText"))}</span></button>`;
+    const kind = (name, drawn) => `<ion-button data-act="kind" data-kind="${name}" fill="${this.newKind === name ? "solid" : "outline"}" aria-pressed="${this.newKind === name}">${icon(drawn, { slot: "start" })}<span>${escape(T(name === "dates" ? "kindDates" : "kindText"))}</span></ion-button>`;
     return `
-      <div class="bar"><h1 class="grow">${escape(T("title"))}</h1>${button("close", T("close"), "close-outline")}</div>
+      <ion-header><ion-toolbar><ion-title>${escape(T("title"))}</ion-title></ion-toolbar></ion-header>
+      <ion-content><div class="view">
       ${this.place === NO_CHAT ? `<p class="hint" data-local>${line("phone-portrait-outline", T("localHome"))}</p>` : ""}
       <div class="kinds" role="group">${kind("dates", "calendar-outline")}${kind("text", "list-outline")}</div>
-      <div class="entry" data-entry="new"><input name="value" maxlength="${MAX_QUESTION}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("questionPlaceholder"))}" aria-label="${escape(T("questionPlaceholder"))}"><button type="button" data-act="create" aria-label="${escape(T("create"))}">${icon("add-outline")}</button></div>
-      ${rows ? `<ul>${rows}</ul>` : `<p class="empty">${escape(T("empty"))}</p>`}`;
+      <div class="entry" data-entry="new"><input name="value" maxlength="${MAX_QUESTION}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("questionPlaceholder"))}" aria-label="${escape(T("questionPlaceholder"))}">${ionButton("create", T("create"), "add-outline")}</div>
+      ${rows ? `<ul>${rows}</ul>` : `<p class="empty">${escape(T("empty"))}</p>`}
+      </div></ion-content>`;
   }
 
   pollScreen() {
@@ -560,7 +568,8 @@ class PollElement extends HTMLElement {
     const poll = this.poll;
     const editable = poll.editable;
     return `
-      <div class="head" data-header></div>
+      <ion-header data-header></ion-header>
+      <ion-content><div class="view">
       <p class="status" data-status aria-live="polite"></p>
       <p class="hint" data-hint>${this.mayLive ? line("sync-outline", T("liveHint")) : escape(T("needsChat"))}</p>
       <p class="warn" data-warning role="alert"></p>
@@ -569,9 +578,10 @@ class PollElement extends HTMLElement {
       ${poll.hasHeader ? "" : `<p class="empty" data-loading>${line("hourglass-outline", T("loading"))}</p>`}
       <div class="banner" data-banner></div>
       ${editable && poll.kind === "dates" ? `<p class="hint">${escape(T("pickDays"))}</p><div data-picker></div>` : ""}
-      ${editable && poll.kind === "text" ? `<div class="entry" data-entry="add"><input name="value" maxlength="${MAX_OPTION}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("addPlaceholder"))}" aria-label="${escape(T("addPlaceholder"))}"><button type="button" data-act="addOption" aria-label="${escape(T("add"))}">${icon("add-outline")}</button></div>` : ""}
+      ${editable && poll.kind === "text" ? `<div class="entry" data-entry="add"><input name="value" maxlength="${MAX_OPTION}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("addPlaceholder"))}" aria-label="${escape(T("addPlaceholder"))}">${ionButton("addOption", T("add"), "add-outline")}</div>` : ""}
       <ul data-options></ul>
-      <div class="footer" data-footer></div>`;
+      <div class="footer" data-footer></div>
+      </div></ion-content>`;
   }
 
   /** The calendar, made once per poll screen so it keeps its month while the poll changes. */
@@ -600,16 +610,22 @@ class PollElement extends HTMLElement {
     const poll = this.poll;
     const name = poll.question || this.pendingTitle || T("received");
     const live = this.session && (this.status === "joined" || this.status === "waiting");
-    // The question has its own line, whole: on a narrow phone a row shared with the buttons cut it
-    // to a few letters. The buttons wrap on the line below, as in List and Split.
-    header.innerHTML = `
-      <div data-title-row><h1 data-name>${escape(name)}</h1></div>
-      <div class="actions" data-actions>
-      ${button("back", T("back"), "arrow-back-outline")}
-      ${this.mayLive && poll.hasHeader && !poll.readOnly ? `<button type="button" data-act="live" class="${live ? "on" : ""}" aria-pressed="${live ? "true" : "false"}" aria-label="${escape(live ? T("stopLive") : T("live"))}">${icon("sync-outline")}<span>${escape(T("live"))}</span></button>` : ""}
-      ${poll.hasHeader && this.inChat ? button("send", T("send"), "send-outline") : ""}
-      ${button("close", T("close"), "close-outline")}
-      </div>`;
+    // The question has its own toolbar, whole: on a narrow phone a row shared with the buttons cut
+    // it to a few letters (and Ionic centres a title over the buttons on iOS). The buttons go in
+    // the toolbar below, as in List. A new header in place of the old one, rather than new children
+    // in it: Ionic keeps its own bookkeeping of what is inside a header.
+    const fresh = document.createElement("ion-header");
+    fresh.dataset.header = "";
+    fresh.innerHTML = `
+      <ion-toolbar data-title-row><h1 data-name>${escape(name)}</h1></ion-toolbar>
+      <ion-toolbar data-actions>
+      <ion-buttons slot="start">${ionButton("back", T("back"), "arrow-back-outline")}</ion-buttons>
+      <ion-buttons slot="end" class="actions">
+      ${this.mayLive && poll.hasHeader && !poll.readOnly ? `<ion-button data-act="live" fill="${live ? "solid" : "clear"}" aria-pressed="${live ? "true" : "false"}" aria-label="${escape(live ? T("stopLive") : T("live"))}">${icon("sync-outline", { slot: "start" })}<span>${escape(T("live"))}</span></ion-button>` : ""}
+      ${poll.hasHeader && this.inChat ? ionButton("send", T("send"), "send-outline") : ""}
+      </ion-buttons>
+      </ion-toolbar>`;
+    header.replaceWith(fresh);
   }
 
   paintStatus() {
@@ -641,8 +657,8 @@ class PollElement extends HTMLElement {
       return;
     }
     node.innerHTML = `<span>${line("sync-outline", this.T("joinPrompt", { name: this.invite.name }))}</span>
-      <button type="button" data-act="join">${escape(this.T("join"))}</button>
-      <button type="button" data-act="notNow">${escape(this.T("notNow"))}</button>`;
+      <ion-button data-act="join">${escape(this.T("join"))}</ion-button>
+      <ion-button fill="outline" data-act="notNow">${escape(this.T("notNow"))}</ion-button>`;
   }
 
   /** Everything that shows the poll's state: the name, the close, the options and the calendar. */
@@ -667,8 +683,8 @@ class PollElement extends HTMLElement {
     const T = (key, holes) => this.T(key, holes);
     const calendar =
       this.poll.kind === "dates"
-        ? `<button type="button" data-act="icsSave" aria-label="${escape(T("icsSave"))}">${icon("calendar-outline")}${icon("download-outline")}</button>
-           ${this.inChat ? `<button type="button" data-act="icsSend" aria-label="${escape(T("icsSend"))}">${icon("calendar-outline")}${icon("send-outline")}</button>` : ""}`
+        ? `<ion-button fill="outline" data-act="icsSave" aria-label="${escape(T("icsSave"))}">${icon("calendar-outline", { slot: "start" })}${icon("download-outline", { slot: "end" })}</ion-button>
+           ${this.inChat ? `<ion-button fill="outline" data-act="icsSend" aria-label="${escape(T("icsSend"))}">${icon("calendar-outline", { slot: "start" })}${icon("send-outline", { slot: "end" })}</ion-button>` : ""}`
         : "";
     const note = { saved: line("calendar-outline", T("icsSaved")), failed: line("alert-circle-outline", T("icsFailed")) }[this.icsNote] ?? "";
     node.innerHTML = `<span class="chosen-text">${line("flag-outline", T("chosen", { option: labelOf(chosen, this.language) }))}</span>${calendar}<p data-ics-note role="status">${note}</p>`;
@@ -731,12 +747,12 @@ class PollElement extends HTMLElement {
     const closing = this.closing ? poll.option(this.closing) : null;
     if (closing) {
       node.innerHTML = `<span>${escape(T("confirmClose", { option: labelOf(closing, this.language) }))}</span>
-        <button type="button" class="danger" data-act="confirmClose">${icon("flag-outline")}<span>${escape(T("closePoll"))}</span></button>
-        <button type="button" data-act="cancelClose">${escape(T("cancel"))}</button>`;
+        <ion-button color="danger" data-act="confirmClose">${icon("flag-outline", { slot: "start" })}<span>${escape(T("closePoll"))}</span></ion-button>
+        <ion-button fill="outline" data-act="cancelClose">${escape(T("cancel"))}</ion-button>`;
     } else if (this.choosing) {
-      node.innerHTML = `<span>${escape(T("chooseHint"))}</span><button type="button" data-act="cancelChoose">${escape(T("cancel"))}</button>`;
+      node.innerHTML = `<span>${escape(T("chooseHint"))}</span><ion-button fill="outline" data-act="cancelChoose">${escape(T("cancel"))}</ion-button>`;
     } else if (poll.options().length) {
-      node.innerHTML = `<button type="button" data-act="closePoll">${icon("flag-outline")}<span>${escape(T("closePoll"))}</span></button>`;
+      node.innerHTML = `<ion-button fill="outline" data-act="closePoll">${icon("flag-outline", { slot: "start" })}<span>${escape(T("closePoll"))}</span></ion-button>`;
     } else {
       node.innerHTML = "";
     }

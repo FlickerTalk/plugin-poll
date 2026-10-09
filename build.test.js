@@ -63,13 +63,13 @@ describe("the package", () => {
     const element = document.createElement("ft-poll");
     document.body.append(element);
     await core.open({ live: false });
-    const field = element.shadowRoot.querySelector('[data-entry="new"]');
+    const field = element.querySelector('[data-entry="new"]');
     field.querySelector("input").value = "Dinner?";
-    field.querySelector("button").click();
+    field.querySelector("[data-act]").click();
     for (let at = 0; at < 50; at += 1) await Promise.resolve();
     await element.keeper.settled();
-    expect(element.shadowRoot.querySelector("[data-name]").textContent).toBe("Dinner?");
-    expect(element.shadowRoot.querySelector("[data-picker] calendar-multi")).not.toBeNull();
+    expect(element.querySelector("[data-name]").textContent).toBe("Dinner?");
+    expect(element.querySelector("[data-picker] calendar-multi")).not.toBeNull();
     expect([...core.records.keys()]).toEqual([`poll/local/${element.poll.id}`]);
   });
 

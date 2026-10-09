@@ -37,7 +37,15 @@ async function phone(core, opening = { live: true, chat: CHAT_A }) {
   return element;
 }
 
-const inside = (element) => element.shadowRoot;
+// In the page, not in a shadow root: Ionic's global styles do not cross a shadow boundary.
+const inside = (element) => element;
+// Ionic moves a button's label to the native button inside it once it has drawn.
+const label = (one) => one?.getAttribute("aria-label") ?? one?.shadowRoot?.querySelector("button")?.getAttribute("aria-label") ?? null;
+/** The app's ✕ (there is none in the plugin): its goodbye runs, then the window goes. */
+async function closeWindow(element, core) {
+  await core.closeWindow();
+  await settle(element);
+}
 const settle = async (...elements) => {
   await flush();
   for (const element of elements) await element.keeper.settled();
@@ -60,7 +68,7 @@ async function fill(element, entry, value, { by = "click" } = {}) {
   const input = node.querySelector("input");
   input.value = value;
   if (by === "enter") input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, composed: true, cancelable: true }));
-  else node.querySelector("button").click();
+  else node.querySelector("[data-act]").click();
   await settle(element);
 }
 /** Creates a poll from the home screen. */
@@ -90,13 +98,13 @@ afterEach(() => {
 });
 
 describe("the manifest", () => {
-  it("asks for live and to propose, nothing more, on core 1.3.0 (the first to give onOpen.chat)", () => {
+  it("asks for live and to propose, nothing more, on core 1.6.0 (the one that lends Ionic)", () => {
     expect(manifest).toEqual({
       id: "com.flickertalk.poll",
       name: "Poll",
-      version: "1.0.2",
+      version: "1.0.3",
       icon: "stats-chart-outline",
-      minCoreVersion: "1.3.0",
+      minCoreVersion: "1.6.0",
       components: ["ft-poll"],
       permissions: { live: true, send: "propose" },
       summary: expect.any(String),
@@ -412,7 +420,7 @@ describe("two phones", () => {
   it("catch up by themselves when one closes the plugin and comes back to the shared poll", async () => {
     const { coreB, a, b, idle } = await shared();
     const id = a.poll.id;
-    await press(b, "close");
+    await closeWindow(b, coreB);
     await idle();
     // Said as leaving the poll, never as closing it (closing is choosing the result).
     expect(statusOf(a)).toContain("doesn't have the poll open any more");
@@ -585,7 +593,7 @@ describe("each conversation apart", () => {
     const keptX = coreC.records.get(recordKey(withA, x));
     expect(Poll.parse(x, keptX).answerOf(whoC, "d20261012")).toBe("yes");
     // Later C opens Poll in the conversation with B, who learnt X's id and A's who.
-    await press(c, "close");
+    await closeWindow(c, coreC);
     document.body.innerHTML = "";
     coreC.reload();
     const coreB = fakeCore();
@@ -661,7 +669,7 @@ describe("the look", () => {
     await flush();
     expect(element.hasAttribute("dark")).toBe(false);
     const css = inside(element).querySelector("style").textContent;
-    expect(css).toContain(":host([dark])");
+    expect(css).toContain("ft-poll[dark]");
     expect(css).toContain("prefers-color-scheme: dark");
     expect(css).not.toContain("host-context");
   });
@@ -687,7 +695,7 @@ describe("the look", () => {
       }
     }
     const style = inside(element).querySelector("style").textContent;
-    const rule = (selector) => style.match(new RegExp(`(?:^|\\n)${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+    const rule = (selector) => style.match(new RegExp(`(?:^|\\n)(?:ft-poll )?${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
     // The row may put the actions under the text, all together and at the end; they never split.
     expect(rule("li[data-option]")).toMatch(/flex-wrap:\s*wrap/);
     expect(rule(".acts")).toMatch(/flex-wrap:\s*nowrap/);
@@ -719,8 +727,8 @@ describe("the look", () => {
     expect(titleRow.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(titleRow.querySelector("[data-name]").textContent).toBe(long);
     expect(long).toHaveLength(200);
-    expect(titleRow.querySelector("button")).toBeNull();
-    for (const act of ["back", "live", "send", "close"]) expect(actions.querySelector(`[data-act="${act}"]`), act).not.toBeNull();
+    expect(titleRow.querySelector("button, ion-button")).toBeNull();
+    for (const act of ["back", "live", "send"]) expect(actions.querySelector(`[data-act="${act}"]`), act).not.toBeNull();
     const css = [...inside(element).querySelectorAll("style")].map((one) => one.textContent).join("\n");
     expect(css).not.toContain("ellipsis");
     expect(css).toMatch(/\.actions\s*\{[^}]*flex-wrap:\s*wrap/);
@@ -734,8 +742,8 @@ describe("the look", () => {
     const element = document.createElement("ft-poll");
     document.body.append(element);
     const style = inside(element).querySelector("style").textContent;
-    expect(style).toMatch(/:host\s*\{[^}]*max-inline-size:\s*640px/);
-    expect(style).toMatch(/:host\s*\{[^}]*margin-inline:\s*auto/);
+    expect(style).toMatch(/\.view\s*\{[^}]*max-inline-size:\s*640px/);
+    expect(style).toMatch(/\.view\s*\{[^}]*margin-inline:\s*auto/);
   });
 
   it("lets the calendar fill the width, in either direction", () => {
@@ -749,14 +757,63 @@ describe("the look", () => {
   });
 });
 
+describe("with the Ionic the app lends", () => {
+  it("asks for an app that lends Ionic", () => {
+    expect(manifest.minCoreVersion).toBe("1.6.0");
+  });
+
+  it("draws the polls in the page, in Ionic's header and content, with no close of its own", async () => {
+    const element = await phone(fakeCore(), { live: true, chat: CHAT_A });
+    expect(element.shadowRoot).toBe(null);
+    expect(element.querySelector(":scope > ion-header > ion-toolbar > ion-title").textContent).toBe("Polls");
+    expect(element.querySelector(':scope > ion-content .view [data-entry="new"]')).not.toBeNull();
+    expect(element.querySelector('[data-act="close"]')).toBeNull();
+    expect(element.querySelector('[data-entry="new"] [data-act="create"]').tagName).toBe("ION-BUTTON");
+    // The kind of poll: two Ionic buttons, the chosen one filled and pressed.
+    const kind = (name) => element.querySelector(`ion-button[data-act="kind"][data-kind="${name}"]`);
+    expect(kind("dates").getAttribute("fill")).toBe("solid");
+    expect(kind("text").getAttribute("fill")).toBe("outline");
+    await press(element, "kind", '[data-kind="text"]');
+    expect(kind("text").getAttribute("fill")).toBe("solid");
+  });
+
+  it("draws a poll with its question and its buttons in two toolbars of the header, Ionic buttons with labels", async () => {
+    const { a } = await shared();
+    const header = a.querySelector(":scope > ion-header[data-header]");
+    expect(header.querySelector(":scope > ion-toolbar[data-title-row] [data-name]").textContent).toBeTruthy();
+    const actions = header.querySelector(":scope > ion-toolbar[data-actions]");
+    for (const act of ["back", "live", "send"]) {
+      const button = actions.querySelector(`ion-button[data-act="${act}"]`);
+      expect(button, act).not.toBeNull();
+      expect(label(button), act).toBeTruthy();
+    }
+    const live = actions.querySelector('ion-button[data-act="live"]');
+    expect(live.getAttribute("fill")).toBe("solid");
+    expect(live.getAttribute("aria-pressed") ?? live.shadowRoot?.querySelector("button")?.getAttribute("aria-pressed")).toBe("true");
+    expect(a.querySelector(":scope > ion-content [data-options]")).not.toBeNull();
+    expect(a.querySelector('ion-content ion-button[data-act="closePoll"]')).not.toBeNull();
+  });
+
+  it("says goodbye to the other phone when the app's window closes", async () => {
+    const core = fakeCore();
+    const element = await phone(core, { live: false });
+    await create(element, "Dinner?");
+    let left = 0;
+    const leave = element.leave.bind(element);
+    element.leave = async () => ((left += 1), leave());
+    await closeWindow(element, core);
+    expect(left).toBe(1);
+  });
+});
+
 describe("the icons", () => {
   it("draws no emoji on any screen, only Ionicons lent by the app or carried, and every button says what it does", async () => {
     const screens = [];
     const look = (element, what) => {
       const root = inside(element);
       screens.push([what, root.innerHTML]);
-      for (const one of root.querySelectorAll("button")) {
-        const said = one.getAttribute("aria-label") || one.textContent.trim();
+      for (const one of root.querySelectorAll("button, ion-button")) {
+        const said = label(one) || one.textContent.trim();
         expect(said, `${what}: ${one.outerHTML.slice(0, 120)}`).toBeTruthy();
       }
     };

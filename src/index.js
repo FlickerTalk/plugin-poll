@@ -1,0 +1,697 @@
+// Nothing leaves this frame but what the user sends or saves, and what live says to the twin.
+
+import { name as APP_NAME, version as APP_VERSION } from "../module.json";
+import { datePicker } from "./date-picker.js";
+import { shortDay, todayOf } from "./dates.js";
+import { dirOf, makeT } from "./i18n.js";
+import { calendarFile, calendarName } from "./ics.js";
+import { icon } from "./icons.js";
+import { HELLO, Inbox, LiveSession, inOrder, isNewer, toBase64 } from "./live.js";
+import { pollReplica } from "./live-poll.js";
+import { MAX_OPTION, MAX_QUESTION, Poll } from "./poll.js";
+import { Keeper, NO_CHAT, placeOf } from "./store.js";
+import { STRINGS } from "./strings.js";
+import { labelOf, summaryOf } from "./summary.js";
+
+export const FORMAT = "ftpoll";
+const CALENDAR = "text/calendar";
+
+const t = makeT(STRINGS);
+
+const escape = (text) =>
+  String(text).replace(/[&<>"']/g, (one) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[one]);
+
+const ANSWER_ICON = {
+  yes: ["checkmark-circle-outline", "checkmark-circle"],
+  maybe: ["help-circle-outline", "help-circle"],
+  no: ["close-circle-outline", "close-circle"],
+  none: ["remove-outline", "remove-outline"],
+};
+const ANSWERED = ["yes", "maybe", "no"];
+
+const STYLE = `
+ft-poll { display: flex; flex-direction: column; height: 100%; font: 15px system-ui, sans-serif; color: var(--ion-text-color, #111); --paper: var(--ion-background-color, #fff); --line: var(--ion-border-color, #d8d8d8); --soft: var(--ion-color-medium, #666); --accent: var(--ion-color-danger, #e0562b); --good: #1f8a4c; --good-bg: #e6f5ec; --maybe: #a86400; }
+ft-poll[dark] { color: var(--ion-text-color, #f4f4f4); --paper: var(--ion-background-color, #111); --line: var(--ion-border-color, #3a3a3a); --soft: var(--ion-color-medium, #aaa); --good: #6fd39b; --good-bg: #16301f; --maybe: #f0b04c; }
+@media (prefers-color-scheme: dark) { ft-poll { color: var(--ion-text-color, #f4f4f4); --paper: var(--ion-background-color, #111); --line: var(--ion-border-color, #3a3a3a); --soft: var(--ion-color-medium, #aaa); --good: #6fd39b; --good-bg: #16301f; --maybe: #f0b04c; } }
+ft-poll * { box-sizing: border-box; }
+ft-poll ion-content { flex: 1; }
+ft-poll .view { max-inline-size: 640px; margin-inline: auto; padding-inline: 8px; padding-block-end: 16px; }
+ft-poll h1 { font-size: 18px; margin: 0; padding-block: 8px; padding-inline: 16px; overflow-wrap: anywhere; }
+ft-poll .actions { flex-wrap: wrap; }
+ft-poll button {
+  appearance: none; border: 1px solid currentColor; background: transparent; color: inherit;
+  border-radius: 10px; min-width: 44px; min-height: 44px; font: inherit; padding: 0 10px; cursor: pointer; opacity: .8;
+}
+ft-poll button.on, ft-poll button[aria-pressed="true"] { opacity: 1; box-shadow: inset 0 0 0 2px currentColor; }
+ft-poll button.danger { color: var(--accent); }
+ft-poll button.plain { border: 0; }
+ft-poll .i { display: block; width: 22px; height: 22px; margin: auto; background: currentColor; -webkit-mask: var(--i) center/contain no-repeat; mask: var(--i) center/contain no-repeat; }
+ft-poll .i.svg { background: none; -webkit-mask: none; mask: none; }
+ft-poll .i.svg svg { display: block; width: 100%; height: 100%; fill: currentColor; }
+ft-poll ion-button .i[slot="start"] { margin-inline-end: 6px; }
+ft-poll ion-button .i[slot="end"] { margin-inline-start: 6px; }
+ft-poll .with { display: inline-flex; gap: 6px; align-items: center; }
+ft-poll .with .i { flex: none; width: 18px; height: 18px; margin: 0; }
+ft-poll button .i + span, ft-poll button .i + .i { margin-inline-start: 4px; }
+ft-poll button:has(span) { display: inline-flex; align-items: center; }
+ft-poll button .i { display: inline-block; vertical-align: middle; }
+ft-poll [data-answer="yes"] { color: var(--good); }
+ft-poll [data-answer="maybe"] { color: var(--maybe); }
+ft-poll [data-answer="no"] { color: var(--accent); }
+ft-poll .entry { display: flex; gap: 6px; align-items: center; margin: 0; }
+ft-poll input { flex: 1; min-width: 0; font: inherit; color: inherit; background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; height: 44px; }
+ft-poll ul { list-style: none; margin: 8px 0 0; padding: 0; }
+ft-poll li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border-bottom: 1px solid var(--line); min-height: 52px; padding: 6px 4px; }
+ft-poll li[data-good="true"] { background: var(--good-bg); }
+ft-poll li.chosen { box-shadow: inset 4px 0 0 var(--good); }
+ft-poll li .open { flex: 1; display: flex; flex-direction: column; align-items: flex-start; text-align: start; border: 0; border-radius: 0; height: auto; padding: 10px 4px; opacity: 1; }
+ft-poll .title { font-weight: 600; }
+ft-poll .meta { color: var(--soft); font-size: 13px; }
+ft-poll .label { overflow-wrap: anywhere; }
+ft-poll li[data-option] { flex-wrap: wrap; column-gap: 6px; row-gap: 2px; }
+ft-poll .what { flex: 1 1 3.5em; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+ft-poll .acts { display: flex; flex-wrap: nowrap; flex: none; margin-inline-start: auto; align-items: center; gap: 2px; }
+ft-poll .badge { color: var(--good); font-size: 13px; font-weight: 600; }
+ft-poll .theirs, ft-poll .mine { min-width: 24px; justify-content: center; }
+ft-poll .votes { display: flex; gap: 2px; }
+ft-poll .votes button { min-width: 44px; padding: 0; }
+ft-poll .status, ft-poll .hint, ft-poll .warn, ft-poll .note { margin: 4px 0; }
+ft-poll .status:empty, ft-poll .warn:empty, ft-poll .note:empty { display: none; }
+ft-poll .hint, ft-poll .note { color: var(--soft); font-size: 13px; }
+ft-poll .warn { color: var(--accent); }
+ft-poll .invite, ft-poll .banner, ft-poll .footer { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
+ft-poll .invite, ft-poll .banner { padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
+ft-poll .invite:empty, ft-poll .banner:empty, ft-poll .footer:empty { display: none; }
+ft-poll .invite span, ft-poll .banner .chosen-text, ft-poll .footer span { flex: 1 1 60%; }
+ft-poll .banner .chosen-text { font-weight: 600; }
+ft-poll .banner p { flex: 1 1 100%; margin: 0; color: var(--soft); font-size: 13px; }
+ft-poll .banner p:empty { display: none; }
+ft-poll .kinds { display: flex; gap: 6px; margin: 0 0 6px; }
+ft-poll .confirm { flex-wrap: wrap; padding: 8px 0; }
+ft-poll .confirm span { flex: 1 1 100%; }
+ft-poll .empty { color: var(--soft); text-align: center; padding: 40px 0; }
+ft-poll calendar-multi { display: block; inline-size: 100%; margin: 4px 0; }
+ft-poll calendar-multi::part(header) { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+ft-poll calendar-multi::part(button) { appearance: none; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 10px; min-width: 44px; height: 44px; font: inherit; }
+ft-poll calendar-month { display: block; inline-size: 100%; --color-accent: var(--accent); --color-text-on-accent: #fff; }
+ft-poll calendar-month::part(table) { inline-size: 100%; table-layout: fixed; }
+ft-poll calendar-month::part(button) { inline-size: 100%; min-inline-size: 36px; block-size: 40px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; }
+ft-poll calendar-month::part(selected) { background: var(--accent); color: #fff; }
+ft-poll calendar-month::part(today) { box-shadow: inset 0 0 0 1px currentColor; }
+ft-poll calendar-month::part(disallowed) { opacity: .35; }
+`;
+
+const line = (name, text) => (text ? `<span class="with">${icon(name)}<span>${escape(text)}</span></span>` : "");
+const button = (act, label, name, extra = "") => `<button type="button" data-act="${act}" aria-label="${escape(label)}" ${extra}>${icon(name)}</button>`;
+const ionButton = (act, label, name, extra = "") =>
+  `<ion-button ${/\bfill=/.test(extra) ? "" : 'fill="clear"'} data-act="${act}" aria-label="${escape(label)}" ${extra}>${icon(name, { slot: "icon-only" })}</ion-button>`;
+
+class PollElement extends HTMLElement {
+  constructor() {
+    super();
+    // not `this.lang`, that reflects the `lang` attribute, which a constructor may not add
+    this.language = "en";
+    this.mayLive = false;
+    this.screen = "home";
+    this.metas = [];
+    this.poll = null;
+    this.session = null;
+    this.replica = null;
+    this.status = "off";
+    this.stops = [];
+    this.newKind = "dates";
+    this.confirming = null;
+    this.choosing = false;
+    this.closing = null;
+    this.invite = null;
+    this.pendingTitle = "";
+    this.icsNote = "";
+    this.picker = null;
+    this.paintedAs = "";
+  }
+
+  connectedCallback() {
+    this.ft = globalThis.ft;
+    this.useKeeper(NO_CHAT);
+    this.inbox = new Inbox(FORMAT);
+    // no shadow root, Ionic's global styles don't cross it
+    this.view = this;
+    this.addEventListener("click", (event) => this.onClick(event));
+    // no <form>, the frame has no allow-forms and Android's WebView blocks the submission before any submit event
+    this.addEventListener("keydown", (event) => this.onKey(event));
+    this.ft.onOpen((opening) => this.onOpen(opening));
+    this.ft.onClose?.(() => this.leave());
+    this.ft.live?.onMessage?.(inOrder((data) => this.onLive(data)));
+    this.paint();
+  }
+
+  useKeeper(place) {
+    this.place = place;
+    this.keeper = new Keeper(this.ft.records, place);
+    this.keeper.onFull(() => this.paintWarning());
+  }
+
+  get inChat() {
+    return this.place !== NO_CHAT;
+  }
+
+  T(key, holes = {}) {
+    return t(this.language, key, { app: APP_NAME, ...holes });
+  }
+
+  async onOpen(opening) {
+    this.language = opening.lang || "en";
+    this.toggleAttribute("dark", Boolean(opening.dark));
+    const place = placeOf(opening.chat);
+    if (place !== this.place) {
+      if (this.poll) await this.leave();
+      this.screen = "home";
+      this.useKeeper(place);
+    }
+    this.mayLive = Boolean(opening.live) && place !== NO_CHAT;
+    this.setAttribute("lang", this.language);
+    this.setAttribute("dir", dirOf(this.language));
+    this.metas = await this.keeper.index();
+    this.paint();
+  }
+
+  show(poll, { title = "" } = {}) {
+    this.poll = poll;
+    this.screen = "poll";
+    this.status = "off";
+    this.choosing = false;
+    this.closing = null;
+    this.invite = null;
+    this.icsNote = "";
+    this.picker = null;
+    this.pendingTitle = typeof title === "string" ? title.slice(0, MAX_QUESTION) : "";
+    this.stops.push(this.keeper.watch(poll));
+    this.stops.push(poll.onChange(() => this.changed()));
+    this.paint();
+  }
+
+  changed() {
+    if (this.screen !== "poll" || !this.poll) return;
+    if (this.shapeOf(this.poll) !== this.paintedAs) this.paint();
+    else this.paintPoll();
+  }
+
+  shapeOf(poll) {
+    return `${poll.hasHeader}|${poll.kind}|${poll.editable}`;
+  }
+
+  async enter(id) {
+    const poll = await this.keeper.load(id);
+    if (!poll) return;
+    this.show(poll);
+    if (this.mayLive && poll.shared && poll.peer && !poll.readOnly) await this.startLive({ resume: true });
+  }
+
+  async leave() {
+    if (this.session) {
+      const session = this.session;
+      this.session = null;
+      await session.stop();
+    }
+    this.status = "off";
+    for (const stop of this.stops.splice(0)) stop();
+    await this.keeper.settled();
+    this.poll = null;
+    this.picker = null;
+  }
+
+  async home() {
+    await this.leave();
+    this.screen = "home";
+    this.metas = await this.keeper.index();
+    this.paint();
+  }
+
+  makeSession(poll) {
+    const replica = pollReplica(poll);
+    this.replica = replica;
+    const session = new LiveSession({
+      format: FORMAT,
+      app: APP_VERSION,
+      doc: poll.id,
+      who: poll.who,
+      peer: poll.peer,
+      replica,
+      send: (data) => this.ft.live.send(data),
+      onStatus: (status) => {
+        if (this.session !== session) return;
+        this.status = status;
+        this.paintStatus();
+      },
+      onPeer: (who) => {
+        poll.peer = who;
+        poll.shared = true;
+        this.keeper.save(poll);
+      },
+    });
+    return session;
+  }
+
+  async startLive({ resume = false } = {}) {
+    if (!this.poll) return;
+    this.session ??= this.makeSession(this.poll);
+    this.paintStatus();
+    await this.session.start({ resume, title: this.poll.question });
+  }
+
+  async toggleLive() {
+    if (this.session && (this.status === "joined" || this.status === "waiting")) {
+      const session = this.session;
+      this.session = null;
+      this.status = "off";
+      this.paintStatus();
+      await session.stop();
+      return;
+    }
+    await this.startLive({ resume: Boolean(this.poll?.shared && this.poll?.peer) });
+  }
+
+  async onLive(data) {
+    if (!this.mayLive) return;
+    const message = this.inbox.take(data);
+    if (!message) return;
+    if (this.session && message.doc === this.session.doc) {
+      this.replica.from(message.who);
+      await this.session.hear(message);
+      return;
+    }
+    if (isNewer(message)) {
+      if (this.poll && this.poll.id === message.doc) {
+        this.status = "outdated";
+        this.paintStatus();
+      }
+      return;
+    }
+    if (message.k !== HELLO || !this.mayLive || typeof message.sv !== "string") return;
+    const here = this.poll && this.poll.id === message.doc ? this.poll : null;
+    const known = here ?? (await this.keeper.load(message.doc));
+    // only reopen what this phone shared with that same person
+    if (message.resume && (!known || (known.peer && known.peer !== message.who))) return;
+    if (known?.readOnly) return;
+    if (this.screen === "poll" && this.poll && !here) {
+      const title = typeof message.title === "string" ? message.title.slice(0, MAX_QUESTION) : "";
+      this.invite = { message, name: known?.question || title || this.T("received") };
+      this.paintInvite();
+      return;
+    }
+    await this.join(message, known);
+  }
+
+  async join(message, known) {
+    let poll = known;
+    if (!poll || poll !== this.poll) {
+      if (this.screen === "poll") await this.leave();
+      poll = known ?? Poll.received(message.doc);
+      this.show(poll, { title: message.title });
+    }
+    this.session = this.makeSession(poll);
+    this.replica.from(message.who);
+    await this.session.hear(message);
+  }
+
+  async onClick(event) {
+    const target = event.target.closest("button[data-act], ion-button[data-act]");
+    if (!target) return;
+    const { act, id } = target.dataset;
+    const poll = this.poll;
+    switch (act) {
+      case "back":
+        return this.home();
+      case "kind":
+        this.newKind = target.dataset.kind === "text" ? "text" : "dates";
+        return this.paint();
+      case "open":
+        return this.enter(id);
+      case "delete":
+        this.confirming = id;
+        return this.paint();
+      case "cancelDelete":
+        this.confirming = null;
+        return this.paint();
+      case "confirmDelete":
+        this.confirming = null;
+        await this.keeper.forget(id);
+        this.metas = await this.keeper.index();
+        return this.paint();
+      case "vote": {
+        if (!poll) return;
+        const answer = target.dataset.answer;
+        poll.vote(id, poll.answerOf(poll.who, id) === answer ? "none" : answer);
+        return;
+      }
+      case "removeOption":
+        poll?.removeOption(id);
+        return;
+      case "closePoll":
+        this.choosing = true;
+        this.closing = null;
+        return this.paintPoll();
+      case "cancelChoose":
+      case "cancelClose":
+        this.choosing = false;
+        this.closing = null;
+        return this.paintPoll();
+      case "choose":
+        this.closing = id;
+        return this.paintPoll();
+      case "confirmClose": {
+        const closing = this.closing;
+        this.choosing = false;
+        this.closing = null;
+        if (!poll?.close(closing)) this.paintPoll();
+        return;
+      }
+      case "create":
+      case "addOption":
+        return this.confirmEntry(target.closest("[data-entry]"));
+      case "live":
+        return this.toggleLive();
+      case "send":
+        return this.sendSummary();
+      case "icsSave":
+        return this.saveCalendar();
+      case "icsSend":
+        return this.sendCalendar();
+      case "join": {
+        const invite = this.invite;
+        this.invite = null;
+        if (!invite) return;
+        return this.join(invite.message, await this.keeper.load(invite.message.doc));
+      }
+      case "notNow":
+        this.invite = null;
+        return this.paintInvite();
+      default:
+    }
+  }
+
+  onKey(event) {
+    if (event.key !== "Enter" || event.isComposing) return;
+    const entry = event.target.closest?.("[data-entry]");
+    if (!entry) return;
+    event.preventDefault();
+    return this.confirmEntry(entry);
+  }
+
+  async confirmEntry(entry) {
+    const input = entry.querySelector("input");
+    const value = input?.value ?? "";
+    if (entry.dataset.entry === "new") {
+      let poll;
+      try {
+        poll = Poll.create({ kind: this.newKind, question: value });
+      } catch {
+        return;
+      }
+      await this.keeper.save(poll);
+      this.show(poll);
+    } else if (entry.dataset.entry === "add" && this.poll?.addOption(value)) {
+      input.value = "";
+      input.focus?.();
+    }
+  }
+
+  picked(days) {
+    const poll = this.poll;
+    if (!poll?.editable) return;
+    const chosen = new Set(days);
+    const shown = poll.options();
+    for (const day of days) if (!shown.some((one) => one.date === day)) poll.addOption(day);
+    for (const option of shown) if (!chosen.has(option.date) && option.by === poll.who) poll.removeOption(option.id);
+    this.picker?.setDays(this.poll.options().map((one) => one.date));
+  }
+
+  /** ft.say closes the plugin, so leave cleanly first. */
+  async sendSummary() {
+    if (!this.poll?.hasHeader || !this.inChat) return;
+    const text = summaryOf(this.poll, this.language);
+    await this.leave();
+    this.ft.say(text);
+  }
+
+  calendar() {
+    const poll = this.poll;
+    const chosen = poll?.chosen();
+    if (!poll || poll.kind !== "dates" || !chosen?.date) return null;
+    const text = calendarFile({ uid: poll.id, summary: poll.question, day: chosen.date, stamp: poll.closed.t });
+    return { name: calendarName(poll.question), data: toBase64(new TextEncoder().encode(text)) };
+  }
+
+  async saveCalendar() {
+    const file = this.calendar();
+    if (!file) return;
+    let answer = false;
+    try {
+      answer = await this.ft.save(file.name, CALENDAR, file.data);
+    } catch {
+      answer = false;
+    }
+    this.icsNote = answer === false ? "failed" : "saved";
+    this.paintBanner();
+  }
+
+  async sendCalendar() {
+    const file = this.calendar();
+    if (!file || !this.inChat) return;
+    await this.leave();
+    this.ft.send(file.name, CALENDAR, file.data);
+  }
+
+  paint() {
+    if (!this.view) return;
+    if (this.screen === "poll" && this.poll) {
+      this.paintedAs = this.shapeOf(this.poll);
+      this.view.innerHTML = `<style>${STYLE}</style>${this.pollScreen()}`;
+      this.paintHeader();
+      this.paintStatus();
+      this.paintWarning();
+      this.paintInvite();
+      this.mountPicker();
+      this.paintPoll();
+    } else {
+      this.view.innerHTML = `<style>${STYLE}</style>${this.homeScreen()}`;
+    }
+  }
+
+  homeScreen() {
+    const T = (key, holes) => this.T(key, holes);
+    const rows = this.metas
+      .map((meta) => {
+        if (this.confirming === meta.id) {
+          return `<li class="confirm"><span>${escape(T("confirmDelete", { name: meta.question }))}</span>
+            <ion-button color="danger" data-act="confirmDelete" data-id="${escape(meta.id)}">${escape(T("delete"))}</ion-button>
+            <ion-button fill="outline" data-act="cancelDelete">${escape(T("cancel"))}</ion-button></li>`;
+        }
+        const kind = meta.kind === "dates" ? line("calendar-outline", T("kindDates")) : line("list-outline", T("kindText"));
+        const closed = meta.closed ? line("flag-outline", T("closedTag")) : "";
+        const shared = meta.shared ? line("sync-outline", T("shared")) : "";
+        return `<li><button type="button" class="open" data-act="open" data-id="${escape(meta.id)}"><span class="title">${escape(meta.question)}</span><span class="meta">${kind}${closed}${shared}</span></button>
+          ${button("delete", T("delete"), "trash-outline", `data-id="${escape(meta.id)}"`)}</li>`;
+      })
+      .join("");
+    const kind = (name, drawn) => `<ion-button data-act="kind" data-kind="${name}" fill="${this.newKind === name ? "solid" : "outline"}" aria-pressed="${this.newKind === name}">${icon(drawn, { slot: "start" })}<span>${escape(T(name === "dates" ? "kindDates" : "kindText"))}</span></ion-button>`;
+    return `
+      <ion-header><ion-toolbar><ion-title>${escape(T("title"))}</ion-title></ion-toolbar></ion-header>
+      <ion-content><div class="view">
+      ${this.place === NO_CHAT ? `<p class="hint" data-local>${line("phone-portrait-outline", T("localHome"))}</p>` : ""}
+      <div class="kinds" role="group">${kind("dates", "calendar-outline")}${kind("text", "list-outline")}</div>
+      <div class="entry" data-entry="new"><input name="value" maxlength="${MAX_QUESTION}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("questionPlaceholder"))}" aria-label="${escape(T("questionPlaceholder"))}">${ionButton("create", T("create"), "add-outline")}</div>
+      ${rows ? `<ul>${rows}</ul>` : `<p class="empty">${escape(T("empty"))}</p>`}
+      </div></ion-content>`;
+  }
+
+  pollScreen() {
+    const T = (key) => this.T(key);
+    const poll = this.poll;
+    const editable = poll.editable;
+    return `
+      <ion-header data-header></ion-header>
+      <ion-content><div class="view">
+      <p class="status" data-status aria-live="polite"></p>
+      <p class="hint" data-hint>${this.mayLive ? line("sync-outline", T("liveHint")) : escape(T("needsChat"))}</p>
+      <p class="warn" data-warning role="alert"></p>
+      <p class="note" data-note>${poll.readOnly ? line("download-outline", T("readOnly")) : ""}</p>
+      <div class="invite" data-invite></div>
+      ${poll.hasHeader ? "" : `<p class="empty" data-loading>${line("hourglass-outline", T("loading"))}</p>`}
+      <div class="banner" data-banner></div>
+      ${editable && poll.kind === "dates" ? `<p class="hint">${escape(T("pickDays"))}</p><div data-picker></div>` : ""}
+      ${editable && poll.kind === "text" ? `<div class="entry" data-entry="add"><input name="value" maxlength="${MAX_OPTION}" autocomplete="off" enterkeyhint="done" placeholder="${escape(T("addPlaceholder"))}" aria-label="${escape(T("addPlaceholder"))}">${ionButton("addOption", T("add"), "add-outline")}</div>` : ""}
+      <ul data-options></ul>
+      <div class="footer" data-footer></div>
+      </div></ion-content>`;
+  }
+
+  mountPicker() {
+    const slot = this.view?.querySelector("[data-picker]");
+    if (!slot || !this.poll) return;
+    if (!this.picker) {
+      const today = todayOf();
+      this.picker = datePicker({
+        lang: this.language,
+        dir: dirOf(this.language),
+        days: this.poll.options().map((one) => one.date),
+        min: today,
+        today,
+        labels: { previous: this.T("previousMonth"), next: this.T("nextMonth") },
+      });
+      this.picker.onChange((days) => this.picked(days));
+    }
+    slot.append(this.picker.element);
+  }
+
+  paintHeader() {
+    const header = this.view?.querySelector("[data-header]");
+    if (!header || !this.poll) return;
+    const T = (key) => this.T(key);
+    const poll = this.poll;
+    const name = poll.question || this.pendingTitle || T("received");
+    const live = this.session && (this.status === "joined" || this.status === "waiting");
+    // a new ion-header instead of new children, Ionic keeps its own bookkeeping of what's inside one
+    const fresh = document.createElement("ion-header");
+    fresh.dataset.header = "";
+    fresh.innerHTML = `
+      <ion-toolbar data-title-row><h1 data-name>${escape(name)}</h1></ion-toolbar>
+      <ion-toolbar data-actions>
+      <ion-buttons slot="start">${ionButton("back", T("back"), "arrow-back-outline")}</ion-buttons>
+      <ion-buttons slot="end" class="actions">
+      ${this.mayLive && poll.hasHeader && !poll.readOnly ? `<ion-button data-act="live" fill="${live ? "solid" : "clear"}" aria-pressed="${live ? "true" : "false"}" aria-label="${escape(live ? T("stopLive") : T("live"))}">${icon("sync-outline", { slot: "start" })}<span>${escape(T("live"))}</span></ion-button>` : ""}
+      ${poll.hasHeader && this.inChat ? ionButton("send", T("send"), "send-outline") : ""}
+      </ion-buttons>
+      </ion-toolbar>`;
+    header.replaceWith(fresh);
+  }
+
+  paintStatus() {
+    this.paintHeader();
+    const node = this.view?.querySelector("[data-status]");
+    if (!node) return;
+    const T = (key) => this.T(key);
+    const said = {
+      waiting: ["sync-outline", T("waiting")],
+      joined: ["sync-outline", T("joined")],
+      silent: ["person-outline", `${T("silent")} ${T("kept")}`],
+      unreachable: ["cloud-offline-outline", `${T("unreachable")} ${T("kept")}`],
+      left: ["person-outline", `${T("left")} ${T("kept")}`],
+      outdated: ["download-outline", T("outdated")],
+    }[this.status];
+    node.innerHTML = said ? line(...said) : "";
+  }
+
+  paintWarning() {
+    const node = this.view?.querySelector("[data-warning]");
+    if (node) node.innerHTML = this.keeper.full ? line("alert-circle-outline", this.T("full")) : "";
+  }
+
+  paintInvite() {
+    const node = this.view?.querySelector("[data-invite]");
+    if (!node) return;
+    if (!this.invite) {
+      node.innerHTML = "";
+      return;
+    }
+    node.innerHTML = `<span>${line("sync-outline", this.T("joinPrompt", { name: this.invite.name }))}</span>
+      <ion-button data-act="join">${escape(this.T("join"))}</ion-button>
+      <ion-button fill="outline" data-act="notNow">${escape(this.T("notNow"))}</ion-button>`;
+  }
+
+  paintPoll() {
+    if (!this.poll || this.screen !== "poll") return;
+    const name = this.view.querySelector("[data-name]");
+    if (name) name.textContent = this.poll.question || this.pendingTitle || this.T("received");
+    this.paintBanner();
+    this.paintOptions();
+    this.paintFooter();
+    this.picker?.setDays(this.poll.options().map((one) => one.date));
+  }
+
+  paintBanner() {
+    const node = this.view?.querySelector("[data-banner]");
+    if (!node || !this.poll) return;
+    const chosen = this.poll.chosen();
+    if (!chosen) {
+      node.innerHTML = "";
+      return;
+    }
+    const T = (key, holes) => this.T(key, holes);
+    const calendar =
+      this.poll.kind === "dates"
+        ? `<ion-button fill="outline" data-act="icsSave" aria-label="${escape(T("icsSave"))}">${icon("calendar-outline", { slot: "start" })}${icon("download-outline", { slot: "end" })}</ion-button>
+           ${this.inChat ? `<ion-button fill="outline" data-act="icsSend" aria-label="${escape(T("icsSend"))}">${icon("calendar-outline", { slot: "start" })}${icon("send-outline", { slot: "end" })}</ion-button>` : ""}`
+        : "";
+    const note = { saved: line("calendar-outline", T("icsSaved")), failed: line("alert-circle-outline", T("icsFailed")) }[this.icsNote] ?? "";
+    node.innerHTML = `<span class="chosen-text">${line("flag-outline", T("chosen", { option: labelOf(chosen, this.language) }))}</span>${calendar}<p data-ics-note role="status">${note}</p>`;
+  }
+
+  rowLabel(option) {
+    return typeof option.date === "string" ? shortDay(option.date, this.language) : option.text;
+  }
+
+  theirs(option) {
+    const poll = this.poll;
+    const others = poll.participants().filter((who) => who !== poll.who);
+    const answers = others.map((who) => poll.answerOf(who, option.id));
+    const shown = (answers.length ? answers : ["none"]).map((answer) => `<span data-answer="${answer}">${icon(ANSWER_ICON[answer][0])}</span>`).join("");
+    const said = answers.filter((answer) => ANSWERED.includes(answer));
+    const label = said.length ? this.T("theirAnswer", { answer: said.map((answer) => this.T(answer)).join(", ") }) : this.T("theyHaventAnswered");
+    return `<span class="theirs with" role="img" aria-label="${escape(label)}">${shown}</span>`;
+  }
+
+  paintOptions() {
+    const node = this.view?.querySelector("[data-options]");
+    if (!node || !this.poll) return;
+    const T = (key, holes) => this.T(key, holes);
+    const poll = this.poll;
+    const editable = poll.editable;
+    const chosen = poll.closed?.opt;
+    node.innerHTML = poll
+      .options()
+      .map((option) => {
+        const id = escape(option.id);
+        const mine = poll.answerOf(poll.who, option.id);
+        const good = poll.goodForAll(option.id);
+        const votes =
+          editable && !this.choosing
+            ? `<span class="votes" role="group">${ANSWERED.map((answer) => `<button type="button" data-act="vote" data-id="${id}" data-answer="${answer}" aria-pressed="${mine === answer}" aria-label="${escape(T(answer))}">${icon(ANSWER_ICON[answer][mine === answer ? 1 : 0])}</button>`).join("")}</span>`
+            : `<span class="mine" data-answer="${mine}" role="img" aria-label="${escape(mine === "none" ? T("theyHaventAnswered") : T(mine))}">${icon(ANSWER_ICON[mine][1])}</span>`;
+        const choose = editable && this.choosing ? `<button type="button" data-act="choose" data-id="${id}" aria-pressed="${this.closing === option.id}">${icon("flag-outline")}<span>${escape(T("choose"))}</span></button>` : "";
+        const remove = editable && !this.choosing && option.by === poll.who ? button("removeOption", T("remove"), "trash-outline", `class="plain" data-id="${id}"`) : "";
+        return `<li data-option="${id}" data-good="${good}" class="${option.id === chosen ? "chosen" : ""}">
+<span class="what"><span class="label">${escape(this.rowLabel(option))}</span>${good ? `<span class="badge">${line("star-outline", T("goodForBoth"))}</span>` : ""}</span><span class="acts">${this.theirs(option)}${votes}${choose}${remove}</span></li>`;
+      })
+      .join("");
+  }
+
+  paintFooter() {
+    const node = this.view?.querySelector("[data-footer]");
+    if (!node || !this.poll) return;
+    const T = (key, holes) => this.T(key, holes);
+    const poll = this.poll;
+    if (!poll.editable) {
+      node.innerHTML = "";
+      return;
+    }
+    if (!poll.isMine) {
+      node.innerHTML = `<span class="hint">${escape(T("onlyCreator"))}</span>`;
+      return;
+    }
+    const closing = this.closing ? poll.option(this.closing) : null;
+    if (closing) {
+      node.innerHTML = `<span>${escape(T("confirmClose", { option: labelOf(closing, this.language) }))}</span>
+        <ion-button color="danger" data-act="confirmClose">${icon("flag-outline", { slot: "start" })}<span>${escape(T("closePoll"))}</span></ion-button>
+        <ion-button fill="outline" data-act="cancelClose">${escape(T("cancel"))}</ion-button>`;
+    } else if (this.choosing) {
+      node.innerHTML = `<span>${escape(T("chooseHint"))}</span><ion-button fill="outline" data-act="cancelChoose">${escape(T("cancel"))}</ion-button>`;
+    } else if (poll.options().length) {
+      node.innerHTML = `<ion-button fill="outline" data-act="closePoll">${icon("flag-outline", { slot: "start" })}<span>${escape(T("closePoll"))}</span></ion-button>`;
+    } else {
+      node.innerHTML = "";
+    }
+  }
+}
+
+if (typeof customElements !== "undefined" && !customElements.get("ft-poll")) customElements.define("ft-poll", PollElement);
